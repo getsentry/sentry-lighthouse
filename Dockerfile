@@ -50,6 +50,7 @@ ENV NODE_ENV=production \
 VOLUME /data
 EXPOSE 8080
 
-# Migrations are idempotent — running them on every boot is safe and means
-# fresh volumes auto-bootstrap.
-CMD ["node", "src/server.js"]
+# Supervisor spawns the server and the publisher as siblings, forwarding
+# signals and exiting when either child exits (Northflank then restarts the
+# whole container). Both children run migrations on boot (idempotent).
+CMD ["node", "src/supervisor.js"]

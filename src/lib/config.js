@@ -63,6 +63,12 @@ export const config = {
   numRuns: intEnv('LIGHTHOUSE_NUM_RUNS', 5),
   cellTimeoutMs: intEnv('CELL_TIMEOUT_MS', 15 * 60 * 1000),     // 15 min hard ceiling per cell
   workerIdleSleepMs: intEnv('WORKER_IDLE_SLEEP_MS', 5000),       // poll cadence when queue is empty
+
+  // Sentry publisher
+  sentryDsn: process.env.SENTRY_DSN ?? '',
+  sentryEnvironment: process.env.SENTRY_ENVIRONMENT ?? (process.env.NODE_ENV ?? 'development'),
+  publisherPollMs: intEnv('PUBLISHER_POLL_MS', 10_000),          // cadence for the publisher loop
+  sentryFlushTimeoutMs: intEnv('SENTRY_FLUSH_TIMEOUT_MS', 2_000),
 };
 
 /**
