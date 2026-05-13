@@ -48,7 +48,12 @@ ENV GIT_SHA=${GIT_SHA}
 
 ENV NODE_ENV=production \
     PORT=8080 \
-    DATA_DIR=/data
+    DATA_DIR=/data \
+    # Persist the pnpm content-addressable store on the volume so successive
+    # `pnpm install --frozen-lockfile` invocations from per-cell installCmd's
+    # hard-link from cache instead of redownloading. First install fills it;
+    # nightly installs after that are ~seconds.
+    NPM_CONFIG_STORE_DIR=/data/.pnpm-store
 
 VOLUME /data
 EXPOSE 8080

@@ -56,7 +56,9 @@ export const config = {
   dashboardPassword: process.env.DASHBOARD_PASSWORD ?? '',
 
   // Limits
-  maxUploadBytes: intEnv('MAX_UPLOAD_BYTES', 629_145_600), // 600 MB
+  // 100 MB is generous now that bundles ship without node_modules. The old
+  // 600 MB ceiling was for the everything-included tarballs.
+  maxUploadBytes: intEnv('MAX_UPLOAD_BYTES', 104_857_600),
   // 0 = delete bundles as soon as a build leaves the queue (useful for tests).
   bundleRetentionDays: intEnv('BUNDLE_RETENTION_DAYS', 7, { allowZero: true }),
 
@@ -64,6 +66,7 @@ export const config = {
   chromePath: process.env.CHROME_PATH ?? '',
   numRuns: intEnv('LIGHTHOUSE_NUM_RUNS', 5),
   cellTimeoutMs: intEnv('CELL_TIMEOUT_MS', 15 * 60 * 1000),     // 15 min hard ceiling per cell
+  installTimeoutMs: intEnv('INSTALL_TIMEOUT_MS', 5 * 60 * 1000),// 5 min ceiling for pre-lhci installCmd
   workerIdleSleepMs: intEnv('WORKER_IDLE_SLEEP_MS', 5000),       // poll cadence when queue is empty
 
   // Disk pressure

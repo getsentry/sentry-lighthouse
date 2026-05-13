@@ -18,6 +18,7 @@ import { lhrJsonPath, reportDir, reportHtmlPath } from '../lib/paths.js';
 import { config } from '../lib/config.js';
 import { resolveChromePath } from './chrome.js';
 import { collectLighthouse, extractMetrics } from './lighthouse.js';
+import { spawnAndLog } from './spawn.js';
 
 let shouldStop = false;
 let processingPromise = null;
@@ -117,6 +118,20 @@ async function processCell(cell) {
   try {
     log.debug({ extractDir }, 'cell: extracting bundle');
     await tarExtract({ file: cell.bundle_path, cwd: extractDir });
+
+    if (cell.install_cmd) {
+      log.info({ installCmd: cell.install_cmd }, 'cell: running install');
+      await spawnAndLog(cell.install_cmd, [], {
+        cwd: extractDir,
+        // Inherit env so PNPM/NPM cache dirs (set in the Dockerfile) flow
+        // through. CI-supplied install commands rely on the standard PATH.
+        env: process.env,
+        log,
+        timeoutMs: config.installTimeoutMs,
+        label: 'install',
+        shell: true,
+      });
+    }
 
     log.info('cell: invoking lhci');
     const runs = await collectLighthouse({ cell, extractDir, log });

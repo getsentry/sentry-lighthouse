@@ -47,6 +47,10 @@ const CELL_SCHEMA = {
     startCmd: { type: 'string', maxLength: 1024 },
     readyPattern: { type: 'string', maxLength: 256 },
     url: { type: 'string', maxLength: 1024 },
+    // Optional shell command run after extract, before lhci. Used to populate
+    // node_modules from a lockfile when the CI ships a node_modules-less
+    // bundle. Example: 'pnpm install --frozen-lockfile --prefer-offline'.
+    installCmd: { type: 'string', maxLength: 1024 },
   },
 };
 
@@ -225,6 +229,7 @@ export async function buildsRoutes(fastify) {
             readyPattern: defaultReadyPattern(cell),
             url: defaultUrl(cell),
             bundlePath: dst,
+            installCmd: cell.installCmd ?? null,
           });
         }
 
@@ -236,8 +241,8 @@ export async function buildsRoutes(fastify) {
         const insertCell = db.prepare(`
           INSERT INTO cells (
             cell_id, build_id, app, mode, serve_mode, static_dir, start_cmd,
-            ready_pattern, url, bundle_path, status, queued_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)
+            ready_pattern, url, bundle_path, install_cmd, status, queued_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)
         `);
         const nowIso = new Date().toISOString();
         const tx = db.transaction(() => {
@@ -253,7 +258,7 @@ export async function buildsRoutes(fastify) {
             insertCell.run(
               c.cellId, buildId, c.app, c.mode, c.serveMode,
               c.staticDir, c.startCmd, c.readyPattern, c.url, c.bundlePath,
-              nowIso,
+              c.installCmd, nowIso,
             );
           }
         });

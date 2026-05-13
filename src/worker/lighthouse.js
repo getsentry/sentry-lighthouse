@@ -11,12 +11,12 @@
 // (= collection order = runIndex), and hand callers a flat array. The runner
 // doesn't have to know about lhci's on-disk layout.
 
-import { spawn } from 'node:child_process';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { config } from '../lib/config.js';
+import { spawnAndLog } from './spawn.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, '..', '..');
@@ -62,6 +62,7 @@ export async function collectLighthouse({ cell, extractDir, log }) {
     env: { ...process.env, NODE_ENV: 'production' },
     log,
     timeoutMs: config.cellTimeoutMs,
+    label: 'lhci',
   });
 
   return discoverRuns(join(extractDir, '.lighthouseci'));
@@ -91,50 +92,6 @@ async function discoverRuns(lhciDir) {
       jsonPath: join(lhciDir, jsonName),
       htmlPath: htmlSet.has(htmlName) ? join(lhciDir, htmlName) : null,
     };
-  });
-}
-
-/**
- * Spawn a child, stream its stdio into the logger, enforce a wall-clock
- * timeout. Resolves on exit 0, rejects on non-zero exit, signal, or timeout.
- */
-function spawnAndLog(bin, args, { cwd, env, log, timeoutMs }) {
-  return new Promise((resolveOk, rejectErr) => {
-    const proc = spawn(bin, args, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
-
-    let stderrTail = '';
-
-    const onLine = (level, source) => buf => {
-      const text = buf.toString();
-      // Keep the tail of stderr so we have something useful to put in the
-      // error message if lhci exits non-zero.
-      if (source === 'stderr') stderrTail = (stderrTail + text).slice(-2048);
-      for (const line of text.split('\n')) {
-        const trimmed = line.trim();
-        if (trimmed) log[level]({ src: source, line: trimmed }, 'lhci');
-      }
-    };
-
-    proc.stdout.on('data', onLine('info', 'stdout'));
-    proc.stderr.on('data', onLine('warn', 'stderr'));
-
-    const killTimer = setTimeout(() => {
-      log.error({ timeoutMs }, 'lhci collect exceeded timeout; killing');
-      proc.kill('SIGKILL');
-    }, timeoutMs);
-
-    proc.on('error', err => {
-      clearTimeout(killTimer);
-      rejectErr(err);
-    });
-
-    proc.on('close', (code, signal) => {
-      clearTimeout(killTimer);
-      if (code === 0) return resolveOk();
-      const sigPart = signal ? ` (signal=${signal})` : '';
-      const tailPart = stderrTail ? `\nstderr tail:\n${stderrTail}` : '';
-      rejectErr(new Error(`lhci collect exited with code=${code}${sigPart}${tailPart}`));
-    });
   });
 }
 
