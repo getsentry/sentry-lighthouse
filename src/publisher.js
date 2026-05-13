@@ -6,7 +6,8 @@
 // migrations (idempotent; safe even if the server already ran them — both
 // processes share the volume), then start the polling loop.
 
-import './publisher/sentry.js';
+import { setProcessRole } from './lib/sentry.js';
+setProcessRole('publisher');
 
 import { setTimeout as wait } from 'node:timers/promises';
 

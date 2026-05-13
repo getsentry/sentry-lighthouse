@@ -4,6 +4,11 @@
 // runs in the same event loop. Future-us can extract the worker to its own
 // container without touching the public API.
 
+// Init Sentry first so any subsequent module's import-time error gets
+// captured (and so worker / Fastify can call Sentry.captureException).
+import { Sentry, setProcessRole } from './lib/sentry.js';
+setProcessRole('server');
+
 import { setTimeout as wait } from 'node:timers/promises';
 
 import Fastify from 'fastify';
@@ -36,6 +41,32 @@ async function buildServer() {
 
   // --- Plugins ---
   await fastify.register(authPlugin);
+
+  // Report any 5xx-and-above error to Sentry. 4xx errors (validation, auth,
+  // not-found) are caller bugs, not ours — logging them as exceptions would
+  // be pure noise. statusCode==undefined means a generic thrown Error that
+  // Fastify would turn into a 500, so we treat that as 5xx too.
+  fastify.addHook('onError', (req, _reply, err, done) => {
+    const status = err.statusCode;
+    if (status === undefined || status >= 500) {
+      Sentry.captureException(err, {
+        tags: {
+          kind: 'http_error',
+          method: req.method,
+          route: req.routeOptions?.url ?? 'unknown',
+        },
+        contexts: {
+          request: {
+            id: req.id,
+            url: req.url,
+            method: req.method,
+            ip: req.ip,
+          },
+        },
+      });
+    }
+    done();
+  });
   await fastify.register(fastifyMultipart, {
     limits: {
       // One bundle per cell. 600 MB default per file; we have up to 9 cells per

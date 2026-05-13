@@ -17,7 +17,7 @@
 
 import { setTimeout as wait } from 'node:timers/promises';
 
-import { Sentry } from './sentry.js';
+import { Sentry } from '../lib/sentry.js';
 import { getDb } from '../db/index.js';
 import { config } from '../lib/config.js';
 import { logger as rootLogger } from '../lib/logger.js';
@@ -42,6 +42,23 @@ export async function startPublisher() {
       if (shouldStop) break;
       inFlight = publishCell(cell).catch(err => {
         rootLogger.error({ err: err.message, cellId: cell.cell_id }, 'publish failed; will retry next poll');
+        Sentry.captureException(err, {
+          tags: {
+            kind: 'publish_failure',
+            app: cell.app,
+            mode: cell.mode,
+            serve_mode: cell.serve_mode,
+          },
+          contexts: {
+            cell: {
+              cellId: cell.cell_id,
+              buildId: cell.build_id,
+              commit: cell.commit_sha,
+              branch: cell.branch,
+              status: cell.status,
+            },
+          },
+        });
       });
       try { await inFlight; } finally { inFlight = null; }
     }

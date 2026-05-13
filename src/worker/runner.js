@@ -16,6 +16,7 @@ import { newId } from '../lib/ids.js';
 import { logger as rootLogger } from '../lib/logger.js';
 import { lhrJsonPath, reportDir, reportHtmlPath } from '../lib/paths.js';
 import { config } from '../lib/config.js';
+import { Sentry } from '../lib/sentry.js';
 import { resolveChromePath } from './chrome.js';
 import { collectLighthouse, extractMetrics } from './lighthouse.js';
 import { spawnAndLog } from './spawn.js';
@@ -146,6 +147,29 @@ async function processCell(cell) {
     log.info({ runs: persisted.length }, 'cell: completed');
   } catch (err) {
     log.error({ err: err.message }, 'cell: failed');
+    // A cell failure is what the user thinks of as an "E2E test failed":
+    // lhci crashed, the install command exited non-zero, the SSR app didn't
+    // come up, the tarball was malformed, etc. All of those are useful to
+    // surface in Sentry alongside the metrics, with enough context to drill
+    // back into the specific cell.
+    Sentry.captureException(err, {
+      tags: {
+        kind: 'cell_failure',
+        app: cell.app,
+        mode: cell.mode,
+        serve_mode: cell.serve_mode,
+      },
+      contexts: {
+        cell: {
+          cellId: cell.cell_id,
+          buildId: cell.build_id,
+          bundlePath: cell.bundle_path,
+          installCmd: cell.install_cmd,
+          startCmd: cell.start_cmd,
+          url: cell.url,
+        },
+      },
+    });
     markCellFailed(cell.cell_id, err.message);
   } finally {
     await rm(extractDir, { recursive: true, force: true }).catch(err => {
