@@ -42,9 +42,20 @@ RUN npx --yes playwright install chromium
 COPY src ./src
 COPY views ./views
 
-# Versioning: GIT_SHA is baked in at build time and read by /healthz.
-ARG GIT_SHA=unknown
-ENV GIT_SHA=${GIT_SHA}
+# Versioning. Northflank auto-populates these four ARGs at build time when
+# the service is configured to forward them (Build settings → Build args).
+# We also accept the manual GIT_SHA build-arg as a fallback for local builds.
+ARG NF_GIT_SHA=""
+ARG NF_GIT_BRANCH=""
+ARG NF_PREVIOUS_BUILD_GIT_SHA=""
+ARG NF_BUILD_ID=""
+ARG GIT_SHA=""
+
+ENV NF_GIT_SHA=${NF_GIT_SHA} \
+    NF_GIT_BRANCH=${NF_GIT_BRANCH} \
+    NF_PREVIOUS_BUILD_GIT_SHA=${NF_PREVIOUS_BUILD_GIT_SHA} \
+    NF_BUILD_ID=${NF_BUILD_ID} \
+    GIT_SHA=${GIT_SHA}
 
 ENV NODE_ENV=production \
     PORT=8080 \

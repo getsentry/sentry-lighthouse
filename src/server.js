@@ -52,7 +52,9 @@ async function buildServer() {
   // --- Routes ---
   // /healthz is intentionally unauthenticated — Northflank pings it.
   // Includes queue depth so external monitoring can alarm on a stuck worker
-  // (e.g. queued > 0 for > 30 minutes).
+  // (e.g. queued > 0 for > 30 minutes), and the Northflank build context
+  // (commit, branch, build id, previous deploy's commit) so a 'what's
+  // running and what changed since last deploy?' answer is one curl away.
   fastify.get('/healthz', async () => {
     const q = getDb().prepare(`
       SELECT
@@ -67,6 +69,12 @@ async function buildServer() {
       version: config.gitSha,
       packageVersion: config.packageVersion,
       uptimeSec: Math.round(process.uptime()),
+      build: {
+        sha: config.gitSha,
+        branch: config.gitBranch,
+        previousSha: config.previousBuildSha,
+        buildId: config.buildId,
+      },
       queue: {
         queued: q.queued ?? 0,
         running: q.running ?? 0,

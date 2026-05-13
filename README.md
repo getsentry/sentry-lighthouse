@@ -142,7 +142,7 @@ The live deployment is configured per the table below. To stand up another insta
 | Setting | Value |
 | --- | --- |
 | Image | this Dockerfile (build from repo) |
-| Build args | `GIT_SHA=${CI_GIT_COMMIT_SHORT_SHA}` so `/healthz` reports the real commit |
+| Build args | `NF_GIT_SHA=${NF_GIT_SHA}`, `NF_GIT_BRANCH=${NF_GIT_BRANCH}`, `NF_PREVIOUS_BUILD_GIT_SHA=${NF_PREVIOUS_BUILD_GIT_SHA}`, `NF_BUILD_ID=${NF_BUILD_ID}` — Northflank substitutes these automatically. They surface on `/healthz` under `build`. |
 | Ports | `8080` → public HTTPS |
 | Volume | 20 GB persistent volume mounted at `/data` — not optional, holds SQLite + bundles + reports |
 | Resources | 2 vCPU / 4 GB RAM (matches Lighthouse's hardware recommendation) |

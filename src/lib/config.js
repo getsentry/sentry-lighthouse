@@ -38,11 +38,15 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   logLevel: process.env.LOG_LEVEL ?? 'info',
 
-  // Identity / versioning
+  // Identity / versioning. Northflank exposes the four NF_* build args
+  // automatically when listed in the service's Build args config. We prefer
+  // those (truthier than what a human would manually pass) and fall back to
+  // the local-build GIT_SHA arg, then the package version for bare local dev.
   packageVersion: pkg.version,
-  // GIT_SHA is baked in at Docker build time (ARG/ENV). Falls back to package
-  // version so local dev still gets *some* identifier in /healthz.
-  gitSha: process.env.GIT_SHA ?? `dev-${pkg.version}`,
+  gitSha: process.env.NF_GIT_SHA || process.env.GIT_SHA || `dev-${pkg.version}`,
+  gitBranch: process.env.NF_GIT_BRANCH || null,
+  previousBuildSha: process.env.NF_PREVIOUS_BUILD_GIT_SHA || null,
+  buildId: process.env.NF_BUILD_ID || null,
 
   // Storage
   dataDir,
