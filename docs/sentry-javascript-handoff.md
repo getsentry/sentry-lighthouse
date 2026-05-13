@@ -734,15 +734,17 @@ Each of those is its own PR; opening separate tickets is fine.
 
 ## Appendix A: Sentry metric schema (for dashboard authors)
 
-| Metric | Type | Unit | Attributes |
-| --- | --- | --- | --- |
-| `lighthouse.score` | distribution | `ratio` | `app, mode, branch, commit, serve_mode, run_index` |
-| `lighthouse.lcp` | distribution | `millisecond` | same |
-| `lighthouse.fcp` | distribution | `millisecond` | same |
-| `lighthouse.tbt` | distribution | `millisecond` | same |
-| `lighthouse.cls` | distribution | — | same |
-| `lighthouse.bytes` | distribution | `byte` | same |
-| `lighthouse.cell.completed` | counter | — | `app, mode, branch, commit, serve_mode, result (completed\|failed), runs` |
+| Metric | Type | Unit | Value range | Attributes |
+| --- | --- | --- | --- | --- |
+| `lighthouse.score` | distribution | `percentage` | 0–100 (LHR's 0..1 multiplied by 100 so dashboards render `78%`) | `app, mode, branch, commit, serve_mode, run_index` |
+| `lighthouse.lcp` | distribution | `millisecond` | non-negative | same |
+| `lighthouse.fcp` | distribution | `millisecond` | non-negative | same |
+| `lighthouse.tbt` | distribution | `millisecond` | non-negative | same |
+| `lighthouse.cls` | distribution | `number` | non-negative (typically 0–0.25, can exceed 1) | same |
+| `lighthouse.bytes` | distribution | `byte` | non-negative | same |
+| `lighthouse.cell.completed` | counter | — | always 1 | `app, mode, branch, commit, serve_mode, result (completed\|failed), runs` |
+
+Note on units: Sentry's metrics product accepts only a fixed set of unit strings (see the API error if you pass an invalid one — the allowed list includes `integer`, `number`, `millisecond`, `byte`, `percentage`, but not `ratio` or `percent`). Picking a valid unit is what enables `p50` / `p90` / `p99` aggregates in dashboards; an invalid unit silently downgrades the metric to a string-typed field and aggregates refuse to run.
 
 Plus auto-attached: `service=sentry-lighthouse`, `deploy_env=<env>`,
 `sentry.release=<git-sha>`. Use `app`, `mode`, `branch`, `commit` to slice;

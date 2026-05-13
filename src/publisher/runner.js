@@ -124,11 +124,18 @@ async function publishCell(cell) {
 function emitRunMetrics(run, baseAttrs) {
   const attrs = { ...baseAttrs, run_index: run.run_index };
 
-  // Score is a 0..1 ratio. Sentry's distribution chart can render p50/p90
-  // out of the box once we have a few builds in.
+  // Sentry's metrics product accepts a fixed set of unit strings
+  // (integer/number/{nano,micro,milli}second/.../byte/.../percentage/...).
+  // 'ratio' is NOT in that list — emitting it makes the backend fall back
+  // to a string-typed field and refuse to compute p50/p90 over it. Score
+  // and CLS therefore both go through the numeric path below.
+
   if (run.performance_score != null) {
-    Sentry.metrics.distribution('lighthouse.score', run.performance_score, {
-      unit: 'ratio',
+    // LHR scores are 0..1 floats; Lighthouse's own UI shows them as 0..100.
+    // We multiply here so Sentry dashboards render '78%' instead of '0.78'
+    // and so 'percentage' (a valid Sentry unit) describes the value.
+    Sentry.metrics.distribution('lighthouse.score', run.performance_score * 100, {
+      unit: 'percentage',
       attributes: attrs,
     });
   }
@@ -151,8 +158,12 @@ function emitRunMetrics(run, baseAttrs) {
     });
   }
   if (run.cls != null) {
-    // CLS is a unitless score (cumulative layout shift), not a 0..1 ratio.
-    Sentry.metrics.distribution('lighthouse.cls', run.cls, { attributes: attrs });
+    // CLS is a unitless cumulative-layout-shift score (typically 0..0.25,
+    // can exceed 1). 'number' tells Sentry it's a plain numeric distribution.
+    Sentry.metrics.distribution('lighthouse.cls', run.cls, {
+      unit: 'number',
+      attributes: attrs,
+    });
   }
   if (run.total_bytes != null) {
     Sentry.metrics.distribution('lighthouse.bytes', run.total_bytes, {
