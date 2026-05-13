@@ -2,7 +2,7 @@
 
 Self-hosted Lighthouse lab for [`getsentry/sentry-javascript`](https://github.com/getsentry/sentry-javascript). Accepts prebuilt SDK test-app bundles from GitHub Actions, runs Lighthouse on stable hardware, ships every run to Sentry as a distribution metric.
 
-See [`PLAN.md`](./PLAN.md) for the original design rationale (the "why dedicated hardware" answer). One thing has changed since: instead of building our own HTML dashboard, we ship metrics to Sentry's new metrics product and let Sentry's dashboards take over visualisation.
+Why a dedicated service? Google's own Lighthouse docs are explicit that shared-tenancy CI runners are the #1 cause of measurement variance. Running Lighthouse on `ubuntu-latest` produced run-to-run jitter (`+2 / -5` on the same code) that drowned the signal we care about. Moving the measurement onto a single-tenant Northflank instance with a pinned Chrome version makes the noise go away.
 
 ## Architecture
 
@@ -126,4 +126,4 @@ See [`.env.example`](./.env.example). Required: `UPLOAD_TOKEN`. Recommended: `SE
 - Resources: 2 vCPU / 4 GB RAM (matches Lighthouse's hardware recommendation)
 - Healthcheck: `GET /healthz` every 30s
 
-The CI side (the `sentry-javascript` workflow that builds test apps and POSTs them here) is tracked separately — see [`PLAN.md`](./PLAN.md) → "Companion changes in `sentry-javascript`".
+The CI side (the `sentry-javascript` workflow that builds test apps and POSTs them here) is tracked separately.

@@ -1,8 +1,8 @@
 // Fastify entrypoint. Runs migrations, mounts plugins/routes, listens.
 //
-// The HTTP server and the worker share this single process (see PLAN.md
-// "Architecture") so the queue runs in the same event loop. Future-us can
-// extract the worker to its own container without touching the public API.
+// The HTTP server and the worker share this single process so the queue
+// runs in the same event loop. Future-us can extract the worker to its own
+// container without touching the public API.
 
 import { setTimeout as wait } from 'node:timers/promises';
 

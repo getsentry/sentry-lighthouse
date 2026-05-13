@@ -1,5 +1,7 @@
 -- Initial schema. Three tables: builds → cells → runs.
--- See PLAN.md "Storage schema" for the rationale.
+--   builds  one row per CI upload
+--   cells   one row per (app, mode) inside a build
+--   runs    one row per Lighthouse run inside a cell (typically 5)
 
 CREATE TABLE IF NOT EXISTS builds (
   build_id          TEXT PRIMARY KEY,            -- ULID

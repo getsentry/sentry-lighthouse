@@ -1,7 +1,7 @@
 // Worker loop. Pulls queued cells one at a time, runs Lighthouse, writes
-// results back to SQLite + /data/reports/. Designed for single-process
-// deployment per PLAN.md — one in-flight cell at a time per Google's
-// variability docs.
+// results back to SQLite + /data/reports/. Single-process, one in-flight
+// cell at a time — Google's Lighthouse variability docs are explicit that
+// concurrent runs on the same machine destroy measurement validity.
 
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
