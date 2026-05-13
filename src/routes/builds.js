@@ -12,7 +12,7 @@
 // Lighthouse, it only writes the queue.
 
 import { createWriteStream } from 'node:fs';
-import { mkdir, mkdtemp, rename, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -22,6 +22,7 @@ import Ajv from 'ajv';
 import { getDb } from '../db/index.js';
 import { config } from '../lib/config.js';
 import { diskUsageRatio } from '../lib/disk.js';
+import { moveFile } from '../lib/fs.js';
 import { newId } from '../lib/ids.js';
 import { buildDir, bundlePath } from '../lib/paths.js';
 
@@ -211,7 +212,9 @@ export async function buildsRoutes(fastify) {
         for (const cell of metadata.cells) {
           const src = tempFiles.get(cell.bundleField);
           const dst = bundlePath(buildId, cell.app, cell.mode);
-          await rename(src, dst);
+          // Cross-device safe — /tmp and /data live on different filesystems
+          // inside the Docker container.
+          await moveFile(src, dst);
           cellRows.push({
             cellId: newId(),
             app: cell.app,

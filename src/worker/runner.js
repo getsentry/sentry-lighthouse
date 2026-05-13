@@ -3,7 +3,7 @@
 // deployment per PLAN.md — one in-flight cell at a time per Google's
 // variability docs.
 
-import { mkdir, mkdtemp, readFile, rename, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as wait } from 'node:timers/promises';
@@ -11,6 +11,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 import { extract as tarExtract } from 'tar';
 
 import { getDb } from '../db/index.js';
+import { moveFile } from '../lib/fs.js';
 import { newId } from '../lib/ids.js';
 import { logger as rootLogger } from '../lib/logger.js';
 import { lhrJsonPath, reportDir, reportHtmlPath } from '../lib/paths.js';
@@ -155,12 +156,14 @@ async function persistRunArtefacts(runs) {
     await mkdir(dir, { recursive: true });
 
     const newJsonPath = lhrJsonPath(runId, r.runIndex);
-    await rename(r.jsonPath, newJsonPath);
+    // Cross-device safe — lhci writes to /tmp/<cell>/.lighthouseci/, we want
+    // /data/reports/<runId>/, and those are different mounts in Docker.
+    await moveFile(r.jsonPath, newJsonPath);
 
     let newHtmlPath = null;
     if (r.htmlPath) {
       newHtmlPath = reportHtmlPath(runId);
-      await rename(r.htmlPath, newHtmlPath);
+      await moveFile(r.htmlPath, newHtmlPath);
     }
 
     const lhr = JSON.parse(await readFile(newJsonPath, 'utf8'));

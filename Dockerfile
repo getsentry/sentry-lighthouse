@@ -31,8 +31,11 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
 # Pre-fetch the Chromium binary into the image. Playwright stores it under
-# /root/.cache/ms-playwright by default; we keep that for parity with local dev.
-RUN npx --yes playwright install --with-deps=false chromium
+# /root/.cache/ms-playwright by default; we keep that for parity with local
+# dev. We install only the binary — system deps are already in the base
+# layer above (the apt-get above is the same set `playwright install --with-deps`
+# would install).
+RUN npx --yes playwright install chromium
 
 # Application code (Dockerfile is the only thing that needs no rebuild on src
 # changes; everything else gets COPYed here).
