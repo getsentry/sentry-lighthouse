@@ -1,0 +1,16 @@
+node_modules
+data
+.env
+.env.local
+.git
+.github
+.vscode
+.idea
+*.log
+.DS_Store
+.lighthouseci
+.cache
+tmp
+fixtures
+README.md
+PLAN.md

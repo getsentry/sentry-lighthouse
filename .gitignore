@@ -1,0 +1,11 @@
+node_modules
+data
+.env
+.env.local
+*.log
+.DS_Store
+.idea
+.vscode
+.lighthouseci
+.cache
+tmp
