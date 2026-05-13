@@ -1,5 +1,5 @@
 {
-  "name": "sentry-lhci",
+  "name": "sentry-lighthouse",
   "version": "0.1.0",
   "private": true,
   "description": "Self-hosted Lighthouse lab for sentry-javascript. Accepts prebuilt test-app bundles from CI, runs Lighthouse on stable hardware, exposes results via a dashboard.",
@@ -17,8 +17,8 @@
     "dev:publisher": "node --env-file-if-exists=.env --watch src/publisher.js",
     "migrate": "node --env-file-if-exists=.env src/db/migrate.js",
     "fixture:upload": "node --env-file-if-exists=.env scripts/upload-fixture.js",
-    "docker:build": "docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) -t sentry-lhci .",
-    "docker:run": "docker run --rm -p 8080:8080 -v $(pwd)/data:/data --env-file .env sentry-lhci"
+    "docker:build": "docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) -t sentry-lighthouse .",
+    "docker:run": "docker run --rm -p 8080:8080 -v $(pwd)/data:/data --env-file .env sentry-lighthouse"
   },
   "dependencies": {
     "@fastify/basic-auth": "6.2.0",

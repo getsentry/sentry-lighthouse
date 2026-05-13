@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1.7
 #
-# sentry-lhci runtime image. One stage; no compile step (plain JS).
+# sentry-lighthouse runtime image. One stage; no compile step (plain JS).
 #
 # Build:
-#   docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) -t sentry-lhci .
+#   docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) -t sentry-lighthouse .
 #
 # Run:
-#   docker run --rm -p 8080:8080 -v $(pwd)/data:/data --env-file .env sentry-lhci
+#   docker run --rm -p 8080:8080 -v $(pwd)/data:/data --env-file .env sentry-lighthouse
 
 FROM node:22.22.2-bookworm-slim
 

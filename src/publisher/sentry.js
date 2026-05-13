@@ -31,7 +31,7 @@ if (config.sentryDsn) {
   // Global scope attributes attach to every metric envelope without us
   // re-passing them at every call site (SDK ≥10.33.0).
   Sentry.getGlobalScope().setAttributes({
-    service: 'sentry-lhci',
+    service: 'sentry-lighthouse',
     deploy_env: config.sentryEnvironment,
   });
   logger.info({ environment: config.sentryEnvironment, release: config.gitSha }, 'sentry initialised');

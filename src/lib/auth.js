@@ -42,7 +42,7 @@ async function authPluginImpl(fastify) {
   // --- HTTP basic auth (optional; only mount the hook if creds are configured) ---
   if (config.dashboardUsername && config.dashboardPassword) {
     await fastify.register(fastifyBasicAuth, {
-      authenticate: { realm: 'sentry-lhci' },
+      authenticate: { realm: 'sentry-lighthouse' },
       validate: (username, password, _req, _reply, done) => {
         const ok = username === config.dashboardUsername && password === config.dashboardPassword;
         done(ok ? null : new Error('Invalid credentials'));

@@ -9,7 +9,7 @@ const isDev = config.nodeEnv !== 'production';
 
 export const logger = pino({
   level: config.logLevel,
-  base: { svc: 'sentry-lhci', sha: config.gitSha },
+  base: { svc: 'sentry-lighthouse', sha: config.gitSha },
   ...(isDev && {
     transport: {
       target: 'pino-pretty',

@@ -1,14 +1,24 @@
-# sentry-lhci
+# sentry-lighthouse
 
 Self-hosted Lighthouse lab for [`getsentry/sentry-javascript`](https://github.com/getsentry/sentry-javascript). Accepts prebuilt SDK test-app bundles from GitHub Actions, runs Lighthouse on stable hardware, ships every run to Sentry as a distribution metric.
 
-Why a dedicated service? Google's own Lighthouse docs are explicit that shared-tenancy CI runners are the #1 cause of measurement variance. Running Lighthouse on `ubuntu-latest` produced run-to-run jitter (`+2 / -5` on the same code) that drowned the signal we care about. Moving the measurement onto a single-tenant Northflank instance with a pinned Chrome version makes the noise go away.
+## Hosted
+
+- **Public URL:** <https://lighthouse.sentry.gg> — the upload endpoint CI posts to and the read API.
+- **Northflank service:** [`sentry / sentry-lighthouse / sentry-lighthouse`](https://app.northflank.com/o/sentry/t/davidsentrys-team/project/sentry-lighthouse/services/sentry-lighthouse) — build logs, env vars, volume, restarts.
+- **Sentry project:** metrics land in `o447951` under the `lighthouse.*` namespace (see [Metrics shipped to Sentry](#metrics-shipped-to-sentry) below).
+
+Liveness check: `curl https://lighthouse.sentry.gg/healthz`.
+
+## Why a dedicated service?
+
+Google's own Lighthouse docs are explicit that shared-tenancy CI runners are the #1 cause of measurement variance. Running Lighthouse on `ubuntu-latest` produced run-to-run jitter (`+2 / -5` on the same code) that drowned the signal we care about. Moving the measurement onto a single-tenant Northflank instance with a pinned Chrome version makes the noise go away — a recent fixture run on the deployed service had a 5-run LCP spread of 80 ms vs ~200 ms+ typical on shared runners.
 
 ## Architecture
 
 ```
                 ┌──────────────────────────────────────────┐
-                │   sentry-lhci container (Northflank)     │
+                │   sentry-lighthouse container             │
                 │                                          │
    GitHub CI ─► │  src/server.js                           │
    POST bundle  │   • Fastify HTTP (8080)                  │
@@ -68,6 +78,14 @@ pnpm dev
 pnpm fixture:upload
 ```
 
+To run the fixture against the deployed service instead of localhost:
+
+```bash
+LAB_URL=https://lighthouse.sentry.gg \
+  UPLOAD_TOKEN=<token from Northflank env> \
+  pnpm fixture:upload
+```
+
 Individual processes if you're debugging:
 
 ```bash
@@ -119,11 +137,17 @@ See [`.env.example`](./.env.example). Required: `UPLOAD_TOKEN`. Recommended: `SE
 
 ## Deployment (Northflank)
 
-- Image: this Dockerfile, baked with `GIT_SHA` build-arg
-- Volume: 20 GB mounted at `/data`
-- Ports: expose 8080 only
-- Secrets: `UPLOAD_TOKEN`, `SENTRY_DSN`
-- Resources: 2 vCPU / 4 GB RAM (matches Lighthouse's hardware recommendation)
-- Healthcheck: `GET /healthz` every 30s
+The live deployment is configured per the table below. To stand up another instance, point a Northflank service at this Dockerfile and match these settings:
+
+| Setting | Value |
+| --- | --- |
+| Image | this Dockerfile (build from repo) |
+| Build args | `GIT_SHA=${CI_GIT_COMMIT_SHORT_SHA}` so `/healthz` reports the real commit |
+| Ports | `8080` → public HTTPS |
+| Volume | 20 GB persistent volume mounted at `/data` — not optional, holds SQLite + bundles + reports |
+| Resources | 2 vCPU / 4 GB RAM (matches Lighthouse's hardware recommendation) |
+| Healthcheck | `GET /healthz` every 30s |
+| Secrets | `UPLOAD_TOKEN`, `SENTRY_DSN` |
+| Env | `SENTRY_ENVIRONMENT=production` (the rest have sensible defaults in the Dockerfile) |
 
 The CI side (the `sentry-javascript` workflow that builds test apps and POSTs them here) is tracked separately.
