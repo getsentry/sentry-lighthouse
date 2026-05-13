@@ -12,12 +12,13 @@ const pkgPath = resolve(here, '..', '..', 'package.json');
 const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
 
 /** Parse a positive integer env var, fall back to default on missing/invalid. */
-function intEnv(name, fallback) {
+function intEnv(name, fallback, { allowZero = false } = {}) {
   const raw = process.env[name];
   if (raw === undefined || raw === '') return fallback;
   const n = Number.parseInt(raw, 10);
-  if (!Number.isFinite(n) || n <= 0) {
-    throw new Error(`Invalid ${name}: ${raw} (expected positive integer)`);
+  const minOk = allowZero ? n >= 0 : n > 0;
+  if (!Number.isFinite(n) || !minOk) {
+    throw new Error(`Invalid ${name}: ${raw} (expected ${allowZero ? 'non-negative' : 'positive'} integer)`);
   }
   return n;
 }
@@ -56,13 +57,17 @@ export const config = {
 
   // Limits
   maxUploadBytes: intEnv('MAX_UPLOAD_BYTES', 629_145_600), // 600 MB
-  bundleRetentionDays: intEnv('BUNDLE_RETENTION_DAYS', 7),
+  // 0 = delete bundles as soon as a build leaves the queue (useful for tests).
+  bundleRetentionDays: intEnv('BUNDLE_RETENTION_DAYS', 7, { allowZero: true }),
 
   // Lighthouse runtime
   chromePath: process.env.CHROME_PATH ?? '',
   numRuns: intEnv('LIGHTHOUSE_NUM_RUNS', 5),
   cellTimeoutMs: intEnv('CELL_TIMEOUT_MS', 15 * 60 * 1000),     // 15 min hard ceiling per cell
   workerIdleSleepMs: intEnv('WORKER_IDLE_SLEEP_MS', 5000),       // poll cadence when queue is empty
+
+  // Disk pressure
+  diskFullThreshold: parseFloat(process.env.DISK_FULL_THRESHOLD ?? '0.9'), // 0..1; >this rejects uploads with 507
 
   // Sentry publisher
   sentryDsn: process.env.SENTRY_DSN ?? '',

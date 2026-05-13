@@ -12,7 +12,7 @@
 // Lighthouse, it only writes the queue.
 
 import { createWriteStream } from 'node:fs';
-import { mkdir, mkdtemp, rename, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rename, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -21,6 +21,7 @@ import Ajv from 'ajv';
 
 import { getDb } from '../db/index.js';
 import { config } from '../lib/config.js';
+import { diskUsageRatio } from '../lib/disk.js';
 import { newId } from '../lib/ids.js';
 import { buildDir, bundlePath } from '../lib/paths.js';
 
@@ -106,6 +107,18 @@ export async function buildsRoutes(fastify) {
       if (!req.isMultipart()) {
         reply.code(415);
         return { error: 'unsupported_media_type', message: 'expected multipart/form-data' };
+      }
+
+      // Short-circuit before reading the body: if the volume is near full, a
+      // 600 MB tarball will only make things worse. 507 Insufficient Storage
+      // is the right semantic.
+      const usage = await diskUsageRatio(config.dataDir).catch(() => 0);
+      if (usage > config.diskFullThreshold) {
+        reply.code(507);
+        return {
+          error: 'storage_full',
+          message: `data volume is ${(usage * 100).toFixed(1)}% full (threshold ${(config.diskFullThreshold * 100).toFixed(0)}%)`,
+        };
       }
 
       // Stream every file part to a per-upload temp dir first. We don't know
@@ -291,6 +304,60 @@ export async function buildsRoutes(fastify) {
           `).all(limit);
 
       return { builds: rows.map(serializeBuildListRow) };
+    },
+  });
+
+  // ----- POST /api/builds/:buildId/rerun -------------------------------
+  // Re-enqueue every cell of an existing build using the tarballs we still
+  // have on disk. Useful when a result looks flaky and you want a fresh set
+  // of measurements against the same code. Fails 409 if the retention sweep
+  // has already removed any bundle (the build is then read-only history).
+  fastify.post('/api/builds/:buildId/rerun', {
+    onRequest: fastify.requireUploadToken,
+    schema: { params: BUILD_ID_PARAM_SCHEMA },
+    handler: async (req, reply) => {
+      const { buildId } = req.params;
+      const db = getDb();
+
+      const build = db.prepare(`SELECT build_id, status FROM builds WHERE build_id = ?`).get(buildId);
+      if (!build) {
+        reply.code(404);
+        return { error: 'not_found', message: `build ${buildId} does not exist` };
+      }
+      const cells = db.prepare(`SELECT cell_id, app, mode, bundle_path FROM cells WHERE build_id = ?`).all(buildId);
+      if (cells.length === 0) {
+        reply.code(404);
+        return { error: 'no_cells', message: `build ${buildId} has no cells` };
+      }
+
+      for (const c of cells) {
+        try { await stat(c.bundle_path); }
+        catch {
+          reply.code(409);
+          return {
+            error: 'bundle_gone',
+            message: `cell ${c.app}/${c.mode}: bundle at ${c.bundle_path} is no longer on disk (retention sweep)`,
+          };
+        }
+      }
+
+      const nowIso = new Date().toISOString();
+      db.transaction(() => {
+        // Wipe prior runs so the cell starts fresh.
+        db.prepare(`
+          DELETE FROM runs WHERE cell_id IN (SELECT cell_id FROM cells WHERE build_id = ?)
+        `).run(buildId);
+        db.prepare(`
+          UPDATE cells SET status='queued', started_at=NULL, completed_at=NULL,
+                           error=NULL, published_at=NULL
+           WHERE build_id = ?
+        `).run(buildId);
+        db.prepare(`UPDATE builds SET status='queued', completed_at=NULL WHERE build_id=?`).run(buildId);
+      })();
+
+      req.log.info({ buildId, cells: cells.length }, 'build rerun requested');
+      reply.code(202);
+      return { buildId, status: 'queued', cells: cells.length, requeuedAt: nowIso };
     },
   });
 

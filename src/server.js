@@ -17,7 +17,9 @@ import { ensureDataDirs } from './lib/paths.js';
 import { authPlugin } from './lib/auth.js';
 import { buildsRoutes } from './routes/builds.js';
 import { runsRoutes } from './routes/runs.js';
+import { startCleanupLoop, stopCleanupLoop } from './worker/cleanup.js';
 import { startWorker, stopWorker } from './worker/runner.js';
+import { getDb } from './db/index.js';
 
 async function buildServer() {
   assertConfig();
@@ -49,12 +51,29 @@ async function buildServer() {
 
   // --- Routes ---
   // /healthz is intentionally unauthenticated — Northflank pings it.
-  fastify.get('/healthz', async () => ({
-    ok: true,
-    version: config.gitSha,
-    packageVersion: config.packageVersion,
-    uptimeSec: Math.round(process.uptime()),
-  }));
+  // Includes queue depth so external monitoring can alarm on a stuck worker
+  // (e.g. queued > 0 for > 30 minutes).
+  fastify.get('/healthz', async () => {
+    const q = getDb().prepare(`
+      SELECT
+        SUM(status = 'queued')   AS queued,
+        SUM(status = 'running')  AS running,
+        SUM(status = 'completed' AND published_at IS NULL) AS pending_publish_ok,
+        SUM(status = 'failed'    AND published_at IS NULL) AS pending_publish_fail
+      FROM cells
+    `).get();
+    return {
+      ok: true,
+      version: config.gitSha,
+      packageVersion: config.packageVersion,
+      uptimeSec: Math.round(process.uptime()),
+      queue: {
+        queued: q.queued ?? 0,
+        running: q.running ?? 0,
+        pendingPublish: (q.pending_publish_ok ?? 0) + (q.pending_publish_fail ?? 0),
+      },
+    };
+  });
 
   await fastify.register(buildsRoutes);
   await fastify.register(runsRoutes);
@@ -77,10 +96,12 @@ async function start() {
     try {
       // 1. Stop accepting new HTTP connections (so the proxy stops sending them).
       await fastify.close();
-      // 2. Drain the worker. This blocks until the in-flight cell completes,
-      //    which can be up to CELL_TIMEOUT_MS. Northflank gives ~30s by
-      //    default — a long-running cell will be SIGKILLed by the platform
-      //    and resume after restart (orphan recovery marks it failed).
+      // 2. Stop the periodic cleanup tick + drain the worker. This blocks
+      //    until the in-flight cell completes, which can be up to
+      //    CELL_TIMEOUT_MS. Northflank gives ~30s by default — a long-running
+      //    cell will be SIGKILLed by the platform and resume after restart
+      //    (orphan recovery marks it failed).
+      stopCleanupLoop();
       await stopWorker();
       // 3. Final flushes.
       await wait(250); // let pino flush
@@ -99,6 +120,7 @@ async function start() {
   // Worker starts after the HTTP listener so failed worker boot doesn't keep
   // the API offline (the API is useful read-only even with a dead worker).
   startWorker();
+  startCleanupLoop();
 }
 
 start().catch(err => {
