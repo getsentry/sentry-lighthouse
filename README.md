@@ -150,4 +150,4 @@ The live deployment is configured per the table below. To stand up another insta
 | Secrets | `UPLOAD_TOKEN`, `SENTRY_DSN` |
 | Env | `SENTRY_ENVIRONMENT=production` (the rest have sensible defaults in the Dockerfile) |
 
-The CI side (the `sentry-javascript` workflow that builds test apps and POSTs them here) is tracked separately.
+The CI side (the `sentry-javascript` workflow that builds test apps and POSTs them here) lives in a separate PR. The full hand-off doc for that work — API contract, bundle format, file-by-file checklist of what to change in `sentry-javascript` — is in [`docs/sentry-javascript-handoff.md`](./docs/sentry-javascript-handoff.md).
