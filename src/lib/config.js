@@ -60,6 +60,9 @@ export const config = {
 
   // Lighthouse runtime
   chromePath: process.env.CHROME_PATH ?? '',
+  numRuns: intEnv('LIGHTHOUSE_NUM_RUNS', 5),
+  cellTimeoutMs: intEnv('CELL_TIMEOUT_MS', 15 * 60 * 1000),     // 15 min hard ceiling per cell
+  workerIdleSleepMs: intEnv('WORKER_IDLE_SLEEP_MS', 5000),       // poll cadence when queue is empty
 };
 
 /**

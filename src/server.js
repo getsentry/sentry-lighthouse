@@ -17,6 +17,7 @@ import { ensureDataDirs } from './lib/paths.js';
 import { authPlugin } from './lib/auth.js';
 import { buildsRoutes } from './routes/builds.js';
 import { runsRoutes } from './routes/runs.js';
+import { startWorker, stopWorker } from './worker/runner.js';
 
 async function buildServer() {
   assertConfig();
@@ -74,7 +75,14 @@ async function start() {
     shuttingDown = true;
     fastify.log.info({ signal }, 'shutdown started');
     try {
+      // 1. Stop accepting new HTTP connections (so the proxy stops sending them).
       await fastify.close();
+      // 2. Drain the worker. This blocks until the in-flight cell completes,
+      //    which can be up to CELL_TIMEOUT_MS. Northflank gives ~30s by
+      //    default — a long-running cell will be SIGKILLed by the platform
+      //    and resume after restart (orphan recovery marks it failed).
+      await stopWorker();
+      // 3. Final flushes.
       await wait(250); // let pino flush
       closeDb();
       process.exit(0);
@@ -87,6 +95,10 @@ async function start() {
   process.on('SIGINT', () => shutdown('SIGINT'));
 
   await fastify.listen({ port: config.port, host: config.host });
+
+  // Worker starts after the HTTP listener so failed worker boot doesn't keep
+  // the API offline (the API is useful read-only even with a dead worker).
+  startWorker();
 }
 
 start().catch(err => {

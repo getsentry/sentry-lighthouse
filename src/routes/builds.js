@@ -312,19 +312,33 @@ export async function buildsRoutes(fastify) {
         return { error: 'not_found', message: `build ${buildId} does not exist` };
       }
 
-      // For each cell include the representative run if one exists. There's at
-      // most one representative per cell (Phase 3 enforces this).
+      // Return every cell with every run inline. We don't pre-aggregate —
+      // consumers (Sentry publisher, CI summary, humans) can compute
+      // median/p90/etc themselves, but the headline use case ("track stats
+              // over time") lives in Sentry anyway.
       const cells = db.prepare(`
-        SELECT c.cell_id, c.app, c.mode, c.serve_mode, c.status, c.error,
-               c.queued_at, c.started_at, c.completed_at,
-               r.run_id AS rep_run_id,
-               r.performance_score, r.lcp_ms, r.fcp_ms, r.tbt_ms, r.cls, r.total_bytes,
-               (SELECT COUNT(*) FROM runs WHERE cell_id = c.cell_id) AS runs_count
-        FROM cells c
-        LEFT JOIN runs r ON r.cell_id = c.cell_id AND r.is_representative = 1
-        WHERE c.build_id = ?
-        ORDER BY c.app, c.mode
+        SELECT cell_id, app, mode, serve_mode, status, error, published_at,
+               queued_at, started_at, completed_at
+        FROM cells
+        WHERE build_id = ?
+        ORDER BY app, mode
       `).all(buildId);
+
+      const runsByCell = db.prepare(`
+        SELECT r.cell_id, r.run_id, r.run_index, r.is_representative,
+               r.performance_score, r.lcp_ms, r.fcp_ms, r.tbt_ms, r.cls,
+               r.total_bytes, r.report_html_path, r.collected_at
+        FROM runs r
+        JOIN cells c ON c.cell_id = r.cell_id
+        WHERE c.build_id = ?
+        ORDER BY r.cell_id, r.run_index
+      `).all(buildId);
+
+      const groupedRuns = new Map();
+      for (const r of runsByCell) {
+        if (!groupedRuns.has(r.cell_id)) groupedRuns.set(r.cell_id, []);
+        groupedRuns.get(r.cell_id).push(serializeRunRow(r));
+      }
 
       return {
         buildId: build.build_id,
@@ -335,10 +349,31 @@ export async function buildsRoutes(fastify) {
         createdAt: build.created_at,
         completedAt: build.completed_at,
         status: build.status,
-        cells: cells.map(serializeCellDetailRow),
+        cells: cells.map(c => ({
+          ...serializeCellDetailRow(c),
+          runs: groupedRuns.get(c.cell_id) ?? [],
+        })),
       };
     },
   });
+}
+
+function serializeRunRow(r) {
+  return {
+    runId: r.run_id,
+    runIndex: r.run_index,
+    performanceScore: r.performance_score,
+    lcpMs: r.lcp_ms,
+    fcpMs: r.fcp_ms,
+    tbtMs: r.tbt_ms,
+    cls: r.cls,
+    totalBytes: r.total_bytes,
+    collectedAt: r.collected_at,
+    // reportUrl is non-null only for the run we kept the HTML for. Used by CI
+    // workflow summaries / Sentry alert messages to link to one canonical
+    // human-readable report per cell.
+    reportUrl: r.report_html_path ? `/api/runs/${r.run_id}/report.html` : null,
+  };
 }
 
 function serializeBuildListRow(r) {
@@ -366,18 +401,6 @@ function serializeCellDetailRow(r) {
     queuedAt: r.queued_at,
     startedAt: r.started_at,
     completedAt: r.completed_at,
-    runs: r.runs_count,
-    medianRun: r.rep_run_id
-      ? {
-          runId: r.rep_run_id,
-          performanceScore: r.performance_score,
-          lcpMs: r.lcp_ms,
-          fcpMs: r.fcp_ms,
-          tbtMs: r.tbt_ms,
-          cls: r.cls,
-          totalBytes: r.total_bytes,
-          reportUrl: `/api/runs/${r.rep_run_id}/report.html`,
-        }
-      : null,
+    publishedAt: r.published_at,
   };
 }
