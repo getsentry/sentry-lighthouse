@@ -7,6 +7,7 @@
 import { setTimeout as wait } from 'node:timers/promises';
 
 import Fastify from 'fastify';
+import fastifyMultipart from '@fastify/multipart';
 
 import { runMigrations } from './db/migrate.js';
 import { closeDb } from './db/index.js';
@@ -14,6 +15,8 @@ import { assertConfig, config } from './lib/config.js';
 import { logger } from './lib/logger.js';
 import { ensureDataDirs } from './lib/paths.js';
 import { authPlugin } from './lib/auth.js';
+import { buildsRoutes } from './routes/builds.js';
+import { runsRoutes } from './routes/runs.js';
 
 async function buildServer() {
   assertConfig();
@@ -30,6 +33,18 @@ async function buildServer() {
 
   // --- Plugins ---
   await fastify.register(authPlugin);
+  await fastify.register(fastifyMultipart, {
+    limits: {
+      // One bundle per cell. 600 MB default per file; we have up to 9 cells per
+      // build so a single multipart request can be sizeable.
+      fileSize: config.maxUploadBytes,
+      // Keep field count generous so additions to the metadata schema don't
+      // require a config tweak.
+      fields: 64,
+      files: 64,
+      headerPairs: 1000,
+    },
+  });
 
   // --- Routes ---
   // /healthz is intentionally unauthenticated — Northflank pings it.
@@ -40,14 +55,8 @@ async function buildServer() {
     uptimeSec: Math.round(process.uptime()),
   }));
 
-  // Placeholder so callers get a real 401 rather than 404 before Phase 2 lands.
-  fastify.post('/api/builds', {
-    onRequest: fastify.requireUploadToken,
-    handler: async (_req, reply) => {
-      reply.code(501);
-      return { error: 'not_implemented', message: 'Upload endpoint lands in Phase 2' };
-    },
-  });
+  await fastify.register(buildsRoutes);
+  await fastify.register(runsRoutes);
 
   return fastify;
 }
