@@ -147,6 +147,11 @@ function emitRunMetrics(run, baseAttrs) {
   // to a string-typed field and refuse to compute p50/p90 over it. Score
   // and CLS therefore both go through the numeric path below.
 
+  // collect number of runs as a metric (only as attributes doesn't allow for visualization in Sentry)
+  Sentry.metrics.count('lighthouse.run.completed', 1, {
+    attributes: attrs,
+  });
+
   if (run.performance_score != null) {
     // LHR scores are 0..1 floats; Lighthouse's own UI shows them as 0..100.
     // We multiply here so Sentry dashboards render '78%' instead of '0.78'
