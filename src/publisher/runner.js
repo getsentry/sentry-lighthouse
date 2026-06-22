@@ -88,7 +88,7 @@ function pickUnpublishedCells() {
 function loadRunsForCell(cellId) {
   return getDb().prepare(`
     SELECT run_id, run_index, performance_score, lcp_ms, fcp_ms, tbt_ms,
-           cls, total_bytes, collected_at
+           cls, total_bytes, sentry_sdk_init_ms, collected_at
       FROM runs WHERE cell_id = ? ORDER BY run_index
   `).all(cellId);
 }
@@ -190,6 +190,15 @@ function emitRunMetrics(run, baseAttrs) {
   if (run.total_bytes != null) {
     Sentry.metrics.distribution('lighthouse.bytes', run.total_bytes, {
       unit: 'byte',
+      attributes: attrs,
+    });
+  }
+  if (run.sentry_sdk_init_ms != null) {
+    // `performance.measure('sentry-sdk-init-duration')` from the instrumented
+    // test app, surfaced by Lighthouse's user-timings audit. Null for
+    // no-sentry cells, so the dashboard only sees it where it's meaningful.
+    Sentry.metrics.distribution('lighthouse.sentry_sdk_init', run.sentry_sdk_init_ms, {
+      unit: 'millisecond',
       attributes: attrs,
     });
   }

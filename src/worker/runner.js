@@ -226,8 +226,9 @@ function writeRunsToDb({ cell, persisted }) {
     INSERT INTO runs (
       run_id, cell_id, run_index, is_representative,
       performance_score, lcp_ms, fcp_ms, tbt_ms, cls, total_bytes,
+      sentry_sdk_init_ms,
       lhr_json_path, report_html_path, collected_at
-    ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const completedIso = new Date().toISOString();
 
@@ -237,6 +238,7 @@ function writeRunsToDb({ cell, persisted }) {
         r.runId, cell.cell_id, r.runIndex,
         r.metrics.score, r.metrics.lcpMs, r.metrics.fcpMs, r.metrics.tbtMs,
         r.metrics.cls, r.metrics.bytes,
+        r.metrics.sentrySdkInitMs,
         r.jsonPath, r.htmlPath, completedIso,
       );
     }
