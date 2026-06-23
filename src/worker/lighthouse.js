@@ -109,5 +109,19 @@ export function extractMetrics(lhr) {
     tbtMs: round(audit('total-blocking-time')),
     cls: audit('cumulative-layout-shift'),
     bytes: round(audit('total-byte-weight')),
+    sentrySdkInitMs: round(userTimingMeasure(lhr, 'sentry-sdk-init-duration')),
   };
+}
+
+/**
+ * Pull a single `performance.measure()` duration (ms) out of Lighthouse's
+ * `user-timings` audit by name. Returns null if the measure isn't present —
+ * which happens for no-sentry cells, or if the measure fired after the trace
+ * window closed. Only `timingType: 'Measure'` entries carry a duration; marks
+ * are ignored.
+ */
+function userTimingMeasure(lhr, name) {
+  const items = lhr?.audits?.['user-timings']?.details?.items ?? [];
+  const measure = items.find(i => i.name === name && i.timingType === 'Measure');
+  return measure?.duration ?? null;
 }
