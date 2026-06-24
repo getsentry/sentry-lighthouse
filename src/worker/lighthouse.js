@@ -105,6 +105,7 @@ export function extractMetrics(lhr) {
   return {
     score: lhr?.categories?.performance?.score ?? null,
     lcpMs: round(audit('largest-contentful-paint')),
+    lcpElement: lcpElementSelector(lhr),
     fcpMs: round(audit('first-contentful-paint')),
     tbtMs: round(audit('total-blocking-time')),
     cls: audit('cumulative-layout-shift'),
@@ -128,4 +129,16 @@ function userTimingMeasure(lhr, name) {
   const items = lhr?.audits?.['user-timings']?.details?.items ?? [];
   const measure = items.find(i => i.name === name && i.timingType === 'Measure');
   return measure?.duration ?? null;
+}
+
+/**
+ * CSS selector of the element Lighthouse picked as the Largest Contentful
+ * Paint. In Lighthouse 12 the `largest-contentful-paint-element` audit's
+ * details is a `list` of two tables — the first holds the element node, the
+ * second the LCP phase breakdown — so the node lives at items[0].items[0].node.
+ * Returns null when the audit is not-applicable (no LCP element detected).
+ */
+function lcpElementSelector(lhr) {
+  const tables = lhr?.audits?.['largest-contentful-paint-element']?.details?.items ?? [];
+  return tables[0]?.items?.[0]?.node?.selector ?? null;
 }
