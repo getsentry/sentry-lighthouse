@@ -28,6 +28,8 @@ Google's own Lighthouse docs are explicit that shared-tenancy CI runners are the
                 │     time, writes LHR JSON + HTML to      │
                 │     /data/reports/<runId>/               │
                 │   • Periodic bundle retention sweep      │
+                │   • Dashboard: server-rendered HTML at   │
+                │     / and /builds/<buildId>              │
                 │                                          │
                 │  src/publisher.js                        │
                 │   • Polls cells WHERE published_at IS    │
@@ -56,7 +58,7 @@ Google's own Lighthouse docs are explicit that shared-tenancy CI runners are the
                           └────────────────┘
 ```
 
-The container is one image, two long-running Node processes, one SQLite file. No Postgres, no Redis, no message queue, no SPA.
+The container is one image, two long-running Node processes, one SQLite file. No Postgres, no Redis, no message queue, no SPA — the dashboard is plain server-rendered HTML with a sprinkle of vanilla JS.
 
 ## Quick start (local)
 
@@ -114,6 +116,37 @@ All write endpoints require `Authorization: Bearer $UPLOAD_TOKEN`.
 | `GET` | `/api/builds/:buildId` | none | Build detail with every cell's runs + reportUrls |
 | `POST` | `/api/builds/:buildId/rerun` | bearer | Re-enqueue all cells using the stored tarballs |
 | `GET` | `/api/runs/:runId/report.html` | none | Lighthouse HTML report for one run |
+| `GET` | `/` | dashboard | Dashboard home: queue/overview stats, per-app·mode trends, recent builds |
+| `GET` | `/builds/:buildId` | dashboard | Dashboard build detail: per-cell median/spread metrics, all runs, report links |
+
+## Dashboard
+
+A read-only web UI rendered server-side (no build step, no SPA) lives at the
+root:
+
+- **`/`** — overview stat cards (builds, cell pass rate, runs collected, queue
+  depth), a "trends by app & mode" grid of sparklines showing median
+  performance over recent builds, and a recent-builds list.
+- **`/builds/:buildId`** — every cell with headline metric cards (median +
+  min–max spread + a per-run distribution strip), an expandable per-run table
+  (including `lighthouse.run_duration`, `sentry_sdk_pre_init`, `sentry_sdk_init`
+  where present), failure messages for failed cells, and links to each run's
+  Lighthouse HTML report. A token-gated "Re-run build" button posts to the
+  rerun endpoint.
+
+Pages auto-refresh while a build is queued/running. Metric thresholds follow
+Lighthouse's good / needs-improvement / poor cutoffs.
+
+**Auth.** The dashboard (and read API) are public by default. Set
+`DASHBOARD_USERNAME` + `DASHBOARD_PASSWORD` to put HTTP basic auth in front of
+them; uploads always require the bearer `UPLOAD_TOKEN` regardless.
+
+**Local data.** To populate the dashboard with a realistic spread of
+builds/cells/runs without standing up the full CI → worker pipeline:
+
+```bash
+pnpm seed:dev   # inserts synthetic history + placeholder reports into ./data
+```
 
 ## Metrics shipped to Sentry
 

@@ -22,6 +22,7 @@ import { ensureDataDirs } from './lib/paths.js';
 import { authPlugin } from './lib/auth.js';
 import { buildsRoutes } from './routes/builds.js';
 import { runsRoutes } from './routes/runs.js';
+import { dashboardRoutes } from './dashboard/routes.js';
 import { startCleanupLoop, stopCleanupLoop } from './worker/cleanup.js';
 import { startWorker, stopWorker } from './worker/runner.js';
 import { getDb } from './db/index.js';
@@ -116,6 +117,9 @@ async function buildServer() {
 
   await fastify.register(buildsRoutes);
   await fastify.register(runsRoutes);
+
+  // Human-facing dashboard (HTML at `/` and `/builds/:id`, assets at /assets/*).
+  await fastify.register(dashboardRoutes);
 
   return fastify;
 }
