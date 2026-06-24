@@ -64,6 +64,13 @@ supersedes that list.
 
 3 apps × 3 modes = 9 cells per build.
 
+> **Throttle-method fan-out:** the lab measures every uploaded `(app, mode)`
+> spec twice — once per `throttle_method` (`simulate` = Lantern, `devtools` =
+> real browser-applied Slow 4G). So the 9 uploaded specs become **18 cells**
+> per build. The CI upload contract is unchanged; it still posts 9 specs, and
+> the lab fans each one out. Every Sentry metric and cell-scoped error carries
+> the `throttle_method` attribute so the two methods can be compared.
+
 | App slug | Type | Bundle layout | `installCmd` |
 | --- | --- | --- | --- |
 | `default-browser` | static (webpack) | the `build/` dir | none |
@@ -139,11 +146,14 @@ Content-Type: multipart/form-data; boundary=...
 {
   "buildId":     "01HXXXX…",
   "status":      "queued",
-  "cells":       9,
+  "cells":       18,
   "buildUrl":    "/api/builds/01HXXXX…",
   "dashboardUrl":"/builds/01HXXXX…"
 }
 ```
+
+`cells` is the post-fan-out count: each uploaded spec becomes one cell per
+`throttle_method`, so 9 uploaded specs → 18 cells.
 
 **Failure modes** (all return `{ "error": "<slug>", "message": "<human>" }`):
 
@@ -180,6 +190,7 @@ Sample shape (trimmed):
       "cellId": "01HYYYY…",
       "app":    "default-browser",
       "mode":   "no-sentry",
+      "throttleMethod": "simulate",
       "status": "completed",
       "publishedAt": "2026-05-13T09:12:45.835Z",
       "runs": [
@@ -661,14 +672,15 @@ Once the new workflow is on a feature branch:
 ```bash
 # 2. From your laptop, check the lab saw the build:
 curl https://lighthouse.sentry.gg/api/builds | jq '.builds[0]'
-# Expect: commit=<your branch's HEAD SHA>, branch=<your branch>, cellsTotal=9,
-#         cellsCompleted=9, cellsFailed=0, status=completed.
+# Expect: commit=<your branch's HEAD SHA>, branch=<your branch>, cellsTotal=18,
+#         cellsCompleted=18, cellsFailed=0, status=completed.
+#         (18 = 9 uploaded specs × 2 throttle methods.)
 ```
 
 ```bash
 # 3. Drill in:
-curl https://lighthouse.sentry.gg/api/builds/<buildId> | jq '.cells[] | {app, mode, status, runs: (.runs | length)}'
-# Expect 9 lines, all status=completed, all runs=5.
+curl https://lighthouse.sentry.gg/api/builds/<buildId> | jq '.cells[] | {app, mode, throttleMethod, status, runs: (.runs | length)}'
+# Expect 18 lines (9 specs × 2 throttle methods), all status=completed, all runs=5.
 ```
 
 ```bash
@@ -678,13 +690,14 @@ open https://lighthouse.sentry.gg/api/runs/<runId>/report.html
 
 ```bash
 # 5. In Sentry's metrics product (org o447951), filter on
-#    commit=<your branch's HEAD SHA> and confirm you see 9 cells × 5 runs ×
-#    6 metric names = 270 distribution data points plus 9 counter envelopes.
+#    commit=<your branch's HEAD SHA> and confirm you see 18 cells × 5 runs ×
+#    6 metric names = 540 distribution data points plus 18 counter envelopes.
+#    Group by throttle_method to compare simulate vs devtools.
 ```
 
 ```bash
 # 6. Check the Job Summary on the workflow run page: should have a table with
-#    9 rows, every reportUrl resolvable.
+#    18 rows (one per cell × throttle method), every reportUrl resolvable.
 ```
 
 If any of those checks fails, fix it before merging. Errors that surface in
@@ -736,19 +749,24 @@ Each of those is its own PR; opening separate tickets is fine.
 
 | Metric | Type | Unit | Value range | Attributes |
 | --- | --- | --- | --- | --- |
-| `lighthouse.score` | distribution | `percentage` | 0–100 (LHR's 0..1 multiplied by 100 so dashboards render `78%`) | `app, mode, branch, commit, serve_mode, run_index` |
+| `lighthouse.score` | distribution | `percentage` | 0–100 (LHR's 0..1 multiplied by 100 so dashboards render `78%`) | `app, mode, branch, commit, serve_mode, throttle_method, run_index` |
 | `lighthouse.lcp` | distribution | `millisecond` | non-negative | same |
 | `lighthouse.fcp` | distribution | `millisecond` | non-negative | same |
 | `lighthouse.tbt` | distribution | `millisecond` | non-negative | same |
 | `lighthouse.cls` | distribution | `number` | non-negative (typically 0–0.25, can exceed 1) | same |
 | `lighthouse.bytes` | distribution | `byte` | non-negative | same |
-| `lighthouse.cell.completed` | counter | — | always 1 | `app, mode, branch, commit, serve_mode, result (completed\|failed), runs` |
+| `lighthouse.cell.completed` | counter | — | always 1 | `app, mode, branch, commit, serve_mode, throttle_method, result (completed\|failed), runs` |
 
 Note on units: Sentry's metrics product accepts only a fixed set of unit strings (see the API error if you pass an invalid one — the allowed list includes `integer`, `number`, `millisecond`, `byte`, `percentage`, but not `ratio` or `percent`). Picking a valid unit is what enables `p50` / `p90` / `p99` aggregates in dashboards; an invalid unit silently downgrades the metric to a string-typed field and aggregates refuse to run.
 
+Every cell-scoped metric and error also carries `throttle_method`, which is
+`simulate` (Lantern, math-modeled Slow 4G) or `devtools` (real browser-applied
+Slow 4G). Group/split by it to compare the two test methods.
+
 Plus auto-attached: `service=sentry-lighthouse`, `deploy_env=<env>`,
-`sentry.release=<git-sha>`. Use `app`, `mode`, `branch`, `commit` to slice;
-use `commit` to pin to a specific build for regression analysis.
+`sentry.release=<git-sha>`. Use `app`, `mode`, `branch`, `commit`,
+`throttle_method` to slice; use `commit` to pin to a specific build for
+regression analysis.
 
 ---
 
