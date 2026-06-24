@@ -112,6 +112,7 @@ async function processCell(cell) {
     app: cell.app,
     mode: cell.mode,
     serveMode: cell.serve_mode,
+    throttleMethod: cell.throttle_method,
   });
   log.info({ bundlePath: cell.bundle_path }, 'cell: started');
 
@@ -158,6 +159,7 @@ async function processCell(cell) {
         app: cell.app,
         mode: cell.mode,
         serve_mode: cell.serve_mode,
+        throttle_method: cell.throttle_method,
       },
       contexts: {
         cell: {
