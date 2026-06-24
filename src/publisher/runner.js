@@ -88,7 +88,8 @@ function pickUnpublishedCells() {
 function loadRunsForCell(cellId) {
   return getDb().prepare(`
     SELECT run_id, run_index, performance_score, lcp_ms, fcp_ms, tbt_ms,
-           cls, total_bytes, sentry_sdk_init_ms, collected_at
+           cls, total_bytes, run_duration_ms, sentry_sdk_init_ms,
+           sentry_sdk_pre_init_ms, collected_at
       FROM runs WHERE cell_id = ? ORDER BY run_index
   `).all(cellId);
 }
@@ -193,11 +194,27 @@ function emitRunMetrics(run, baseAttrs) {
       attributes: attrs,
     });
   }
+  if (run.run_duration_ms != null) {
+    // Lighthouse's own `timing.total`: how long this single run took
+    // end-to-end. Always present for a successful run.
+    Sentry.metrics.distribution('lighthouse.run_duration', run.run_duration_ms, {
+      unit: 'millisecond',
+      attributes: attrs,
+    });
+  }
   if (run.sentry_sdk_init_ms != null) {
     // `performance.measure('sentry-sdk-init-duration')` from the instrumented
     // test app, surfaced by Lighthouse's user-timings audit. Null for
     // no-sentry cells, so the dashboard only sees it where it's meaningful.
     Sentry.metrics.distribution('lighthouse.sentry_sdk_init', run.sentry_sdk_init_ms, {
+      unit: 'millisecond',
+      attributes: attrs,
+    });
+  }
+  if (run.sentry_sdk_pre_init_ms != null) {
+    // `performance.measure('sentry-sdk-pre-init-duration')` — emitted by the
+    // instrumented apps alongside the init measure. Same null semantics.
+    Sentry.metrics.distribution('lighthouse.sentry_sdk_pre_init', run.sentry_sdk_pre_init_ms, {
       unit: 'millisecond',
       attributes: attrs,
     });

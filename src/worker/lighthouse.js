@@ -109,7 +109,11 @@ export function extractMetrics(lhr) {
     tbtMs: round(audit('total-blocking-time')),
     cls: audit('cumulative-layout-shift'),
     bytes: round(audit('total-byte-weight')),
+    // `timing.total` is Lighthouse's own measure of how long this single run
+    // took end-to-end. Lives at the LHR root, not under `audits`.
+    runDurationMs: round(lhr?.timing?.total ?? null),
     sentrySdkInitMs: round(userTimingMeasure(lhr, 'sentry-sdk-init-duration')),
+    sentrySdkPreInitMs: round(userTimingMeasure(lhr, 'sentry-sdk-pre-init-duration')),
   };
 }
 
