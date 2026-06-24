@@ -38,6 +38,13 @@ export async function collectLighthouse({ cell, extractDir, log }) {
     'collect',
     `--numberOfRuns=${config.numRuns}`,
     '--settings.onlyCategories=performance',
+    // Throttle method = the test dimension. 'simulate' is Lantern (default,
+    // math-modeled Slow 4G); 'devtools' applies real Slow 4G network + CPU
+    // throttling in Chrome. Passed for both so the LHR's
+    // configSettings.throttlingMethod records which method produced the run.
+    // Slow 4G itself is Lighthouse's mobile default, so no throttling values
+    // need to be set — only the method changes.
+    `--settings.throttlingMethod=${cell.throttle_method ?? 'simulate'}`,
     // --no-sandbox is required for Chromium-as-root inside Docker. Harmless on
     // Mac. headless=new uses the modern (Chrome 112+) headless mode.
     '--settings.chromeFlags=--no-sandbox --headless=new',
