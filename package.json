@@ -16,6 +16,7 @@
     "dev:server": "node --env-file-if-exists=.env --watch src/server.js",
     "dev:publisher": "node --env-file-if-exists=.env --watch src/publisher.js",
     "migrate": "node --env-file-if-exists=.env src/db/migrate.js",
+    "seed:dev": "node --env-file-if-exists=.env scripts/seed-dev-data.js",
     "fixture:upload": "node --env-file-if-exists=.env scripts/upload-fixture.js",
     "docker:build": "docker build --build-arg GIT_SHA=$(git rev-parse --short HEAD) -t sentry-lighthouse .",
     "docker:run": "docker run --rm -p 8080:8080 -v $(pwd)/data:/data --env-file .env sentry-lighthouse"
