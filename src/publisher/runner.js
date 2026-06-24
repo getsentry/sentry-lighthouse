@@ -87,7 +87,7 @@ function pickUnpublishedCells() {
 
 function loadRunsForCell(cellId) {
   return getDb().prepare(`
-    SELECT run_id, run_index, performance_score, lcp_ms, fcp_ms, tbt_ms,
+    SELECT run_id, run_index, performance_score, lcp_ms, lcp_element, fcp_ms, tbt_ms,
            cls, total_bytes, run_duration_ms, sentry_sdk_init_ms,
            sentry_sdk_pre_init_ms, collected_at
       FROM runs WHERE cell_id = ? ORDER BY run_index
@@ -163,9 +163,12 @@ function emitRunMetrics(run, baseAttrs) {
     });
   }
   if (run.lcp_ms != null) {
+    // Tag the LCP metric with the element Lighthouse blamed for it (CSS
+    // selector), so dashboards can answer "which element drives LCP" per
+    // app/mode. Absent when the LCP-element audit was not-applicable.
     Sentry.metrics.distribution('lighthouse.lcp', run.lcp_ms, {
       unit: 'millisecond',
-      attributes: attrs,
+      attributes: run.lcp_element ? { ...attrs, lcp_element: run.lcp_element } : attrs,
     });
   }
   if (run.fcp_ms != null) {
