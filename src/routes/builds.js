@@ -102,6 +102,11 @@ function defaultReadyPattern(cell) {
   return cell.readyPattern || 'localhost';
 }
 
+// Every uploaded (app, mode) spec is fanned out into one cell per throttle
+// method, so each scenario is measured under both Lantern and real browser
+// throttling. Order here is the cell creation order within a build.
+const THROTTLE_METHODS = ['simulate', 'devtools'];
+
 // --- Plugin ---------------------------------------------------------------
 
 export async function buildsRoutes(fastify) {
@@ -217,20 +222,26 @@ export async function buildsRoutes(fastify) {
           const src = tempFiles.get(cell.bundleField);
           const dst = bundlePath(buildId, cell.app, cell.mode);
           // Cross-device safe — /tmp and /data live on different filesystems
-          // inside the Docker container.
+          // inside the Docker container. One tarball per uploaded spec; both
+          // throttle-method cells point at it. The worker extracts each cell
+          // into its own temp dir, so sharing the bundle on disk is safe and
+          // avoids doubling upload storage.
           await moveFile(src, dst);
-          cellRows.push({
-            cellId: newId(),
-            app: cell.app,
-            mode: cell.mode,
-            serveMode: cell.serve,
-            staticDir: cell.staticDir ?? null,
-            startCmd: cell.startCmd ?? null,
-            readyPattern: defaultReadyPattern(cell),
-            url: defaultUrl(cell),
-            bundlePath: dst,
-            installCmd: cell.installCmd ?? null,
-          });
+          for (const throttleMethod of THROTTLE_METHODS) {
+            cellRows.push({
+              cellId: newId(),
+              app: cell.app,
+              mode: cell.mode,
+              serveMode: cell.serve,
+              staticDir: cell.staticDir ?? null,
+              startCmd: cell.startCmd ?? null,
+              readyPattern: defaultReadyPattern(cell),
+              url: defaultUrl(cell),
+              bundlePath: dst,
+              installCmd: cell.installCmd ?? null,
+              throttleMethod,
+            });
+          }
         }
 
         const db = getDb();
@@ -241,8 +252,8 @@ export async function buildsRoutes(fastify) {
         const insertCell = db.prepare(`
           INSERT INTO cells (
             cell_id, build_id, app, mode, serve_mode, static_dir, start_cmd,
-            ready_pattern, url, bundle_path, install_cmd, status, queued_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)
+            ready_pattern, url, bundle_path, install_cmd, throttle_method, status, queued_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', ?)
         `);
         const nowIso = new Date().toISOString();
         const tx = db.transaction(() => {
@@ -258,7 +269,7 @@ export async function buildsRoutes(fastify) {
             insertCell.run(
               c.cellId, buildId, c.app, c.mode, c.serveMode,
               c.staticDir, c.startCmd, c.readyPattern, c.url, c.bundlePath,
-              c.installCmd, nowIso,
+              c.installCmd, c.throttleMethod, nowIso,
             );
           }
         });
@@ -392,11 +403,11 @@ export async function buildsRoutes(fastify) {
       // median/p90/etc themselves, but the headline use case ("track stats
               // over time") lives in Sentry anyway.
       const cells = db.prepare(`
-        SELECT cell_id, app, mode, serve_mode, status, error, published_at,
-               queued_at, started_at, completed_at
+        SELECT cell_id, app, mode, serve_mode, throttle_method, status, error,
+               published_at, queued_at, started_at, completed_at
         FROM cells
         WHERE build_id = ?
-        ORDER BY app, mode
+        ORDER BY app, mode, throttle_method
       `).all(buildId);
 
       const runsByCell = db.prepare(`
@@ -471,6 +482,7 @@ function serializeCellDetailRow(r) {
     app: r.app,
     mode: r.mode,
     serveMode: r.serve_mode,
+    throttleMethod: r.throttle_method,
     status: r.status,
     error: r.error,
     queuedAt: r.queued_at,

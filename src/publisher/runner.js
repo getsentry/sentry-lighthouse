@@ -48,6 +48,7 @@ export async function startPublisher() {
             app: cell.app,
             mode: cell.mode,
             serve_mode: cell.serve_mode,
+            throttle_method: cell.throttle_method,
           },
           contexts: {
             cell: {
@@ -73,8 +74,8 @@ function pickUnpublishedCells() {
   // in one round-trip. The partial index `cells_unpublished` keeps this
   // cheap even with a large history.
   return getDb().prepare(`
-    SELECT c.cell_id, c.build_id, c.app, c.mode, c.serve_mode, c.status,
-           c.error, c.started_at, c.completed_at,
+    SELECT c.cell_id, c.build_id, c.app, c.mode, c.serve_mode, c.throttle_method,
+           c.status, c.error, c.started_at, c.completed_at,
            b.commit_sha, b.branch
       FROM cells c
       JOIN builds b ON b.build_id = c.build_id
@@ -108,6 +109,7 @@ async function publishCell(cell) {
     branch: cell.branch,
     commit: cell.commit_sha,
     serve_mode: cell.serve_mode,
+    throttle_method: cell.throttle_method,
   };
 
   if (cell.status === 'failed') {
