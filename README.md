@@ -127,9 +127,12 @@ Per Lighthouse run (default 5 per cell):
 | `lighthouse.tbt` | distribution | `millisecond` |
 | `lighthouse.cls` | distribution | — |
 | `lighthouse.bytes` | distribution | `byte` |
+| `lighthouse.element_timing` | distribution | `millisecond` |
 | `lighthouse.cell.completed` | counter | — |
 
-Attributes attached to every envelope: `app`, `mode`, `branch`, `commit`, `serve_mode`, `run_index`. Sentry's distribution histograms compute p50/p90/p99 in the dashboard — we don't pre-aggregate.
+Attributes attached to every envelope: `app`, `mode`, `branch`, `commit`, `serve_mode`, `throttle_method`, `run_index`. Sentry's distribution histograms compute p50/p90/p99 in the dashboard — we don't pre-aggregate.
+
+`lighthouse.element_timing` is emitted once per `performance.measure('element-timing-<label>')` the instrumented app records (surfaced via Lighthouse's `user-timings` audit). It carries an extra `element` attribute (the measure name with the `element-timing-` prefix stripped, e.g. `hero-image`) so you can slice/compare individual elements within an app/mode. A single run can emit many of these; runs without the instrumentation emit none.
 
 ## Config (env vars)
 

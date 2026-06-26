@@ -90,7 +90,7 @@ function loadRunsForCell(cellId) {
   return getDb().prepare(`
     SELECT run_id, run_index, performance_score, lcp_ms, lcp_element, fcp_ms, tbt_ms,
            cls, total_bytes, run_duration_ms, sentry_sdk_init_ms,
-           sentry_sdk_pre_init_ms, collected_at
+           sentry_sdk_pre_init_ms, element_timings_json, collected_at
       FROM runs WHERE cell_id = ? ORDER BY run_index
   `).all(cellId);
 }
@@ -223,5 +223,32 @@ function emitRunMetrics(run, baseAttrs) {
       unit: 'millisecond',
       attributes: attrs,
     });
+  }
+
+  // Every `performance.measure('element-timing-<label>')` the worker collected
+  // for this run, fanned out into one distribution data point per element. The
+  // metric name stays low-cardinality; the per-element label rides as the
+  // `element` attribute so dashboards can slice/compare elements within an
+  // app/mode. Absent (NULL column) for runs without the instrumentation.
+  for (const et of parseElementTimings(run.element_timings_json)) {
+    Sentry.metrics.distribution('lighthouse.element_timing', et.ms, {
+      unit: 'millisecond',
+      attributes: { ...attrs, element: et.element },
+    });
+  }
+}
+
+/**
+ * Decode the `element_timings_json` column into `[{element, ms}]`. Tolerates
+ * NULL (no measures) and malformed JSON — a bad blob shouldn't sink the whole
+ * cell's publish, so we log nothing here and just skip it.
+ */
+function parseElementTimings(json) {
+  if (!json) return [];
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed.filter(et => et && typeof et.element === 'string' && et.ms != null) : [];
+  } catch {
+    return [];
   }
 }

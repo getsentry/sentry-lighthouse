@@ -49,7 +49,11 @@ export function startWorker() {
 }
 
 async function runLoop() {
-  rootLogger.info({ numRuns: config.numRuns, cellTimeoutMs: config.cellTimeoutMs }, 'worker loop started');
+  rootLogger.info({
+    numRuns: config.numRuns,
+    cellTimeoutMs: config.cellTimeoutMs,
+    cellTimeoutMsDevtools: config.cellTimeoutMsDevtools,
+  }, 'worker loop started');
   while (!shouldStop) {
     const cell = pickNextQueuedCell();
     if (!cell) {
@@ -228,9 +232,9 @@ function writeRunsToDb({ cell, persisted }) {
     INSERT INTO runs (
       run_id, cell_id, run_index, is_representative,
       performance_score, lcp_ms, lcp_element, fcp_ms, tbt_ms, cls, total_bytes,
-      run_duration_ms, sentry_sdk_init_ms, sentry_sdk_pre_init_ms,
+      run_duration_ms, sentry_sdk_init_ms, sentry_sdk_pre_init_ms, element_timings_json,
       lhr_json_path, report_html_path, collected_at
-    ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const completedIso = new Date().toISOString();
 
@@ -241,6 +245,9 @@ function writeRunsToDb({ cell, persisted }) {
         r.metrics.score, r.metrics.lcpMs, r.metrics.lcpElement, r.metrics.fcpMs, r.metrics.tbtMs,
         r.metrics.cls, r.metrics.bytes,
         r.metrics.runDurationMs, r.metrics.sentrySdkInitMs, r.metrics.sentrySdkPreInitMs,
+        // Dynamic set → JSON array. NULL (not '[]') when empty, matching the
+        // null-means-absent semantics of the scalar measure columns.
+        r.metrics.elementTimings?.length ? JSON.stringify(r.metrics.elementTimings) : null,
         r.jsonPath, r.htmlPath, completedIso,
       );
     }

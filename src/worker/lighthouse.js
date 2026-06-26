@@ -34,6 +34,12 @@ const lhciBin = resolve(projectRoot, 'node_modules', '.bin', 'lhci');
  * @returns {Promise<Array<{runIndex:number,jsonPath:string,htmlPath:string|null}>>}
  */
 export async function collectLighthouse({ cell, extractDir, log }) {
+  // Same run count for both methods, but the wall-clock budget is method-
+  // dependent: 'devtools' applies real Slow 4G in real time, so the same number
+  // of runs takes much longer than Lantern ('simulate') and needs more headroom.
+  const isDevtools = cell.throttle_method === 'devtools';
+  const timeoutMs = isDevtools ? config.cellTimeoutMsDevtools : config.cellTimeoutMs;
+
   const cliArgs = [
     'collect',
     `--numberOfRuns=${config.numRuns}`,
@@ -63,12 +69,12 @@ export async function collectLighthouse({ cell, extractDir, log }) {
     cliArgs.push(`--url=${cell.url}`);
   }
 
-  log.info({ args: cliArgs }, 'lhci collect: starting');
+  log.info({ args: cliArgs, numRuns: config.numRuns, timeoutMs }, 'lhci collect: starting');
   await spawnAndLog(lhciBin, cliArgs, {
     cwd: extractDir,
     env: { ...process.env, NODE_ENV: 'production' },
     log,
-    timeoutMs: config.cellTimeoutMs,
+    timeoutMs,
     label: 'lhci',
   });
 
@@ -122,7 +128,36 @@ export function extractMetrics(lhr) {
     runDurationMs: round(lhr?.timing?.total ?? null),
     sentrySdkInitMs: round(userTimingMeasure(lhr, 'sentry-sdk-init-duration')),
     sentrySdkPreInitMs: round(userTimingMeasure(lhr, 'sentry-sdk-pre-init-duration')),
+    elementTimings: elementTimingMeasures(lhr),
   };
+}
+
+const ELEMENT_TIMING_PREFIX = 'element-timing-';
+
+/**
+ * Collect every `performance.measure()` whose name starts with
+ * `element-timing-` out of Lighthouse's `user-timings` audit. Unlike the fixed
+ * sentry-sdk-* measures, this is a dynamic set (one per timed element), so we
+ * return an array of `{element, ms}` rather than a single scalar. `element` is
+ * the measure name with the `element-timing-` prefix stripped (e.g.
+ * 'element-timing-hero-image' → 'hero-image'); `ms` is the rounded duration.
+ *
+ * Only `timingType: 'Measure'` entries carry a duration — marks are ignored.
+ * Returns `[]` when no matching measures are present.
+ */
+function elementTimingMeasures(lhr) {
+  const items = lhr?.audits?.['user-timings']?.details?.items ?? [];
+  const out = [];
+  for (const item of items) {
+    if (item.timingType !== 'Measure') continue;
+    if (typeof item.name !== 'string' || !item.name.startsWith(ELEMENT_TIMING_PREFIX)) continue;
+    if (item.duration == null) continue;
+    out.push({
+      element: item.name.slice(ELEMENT_TIMING_PREFIX.length),
+      ms: Math.round(item.duration),
+    });
+  }
+  return out;
 }
 
 /**

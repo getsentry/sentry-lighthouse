@@ -68,8 +68,15 @@ export const config = {
 
   // Lighthouse runtime
   chromePath: process.env.CHROME_PATH ?? '',
-  numRuns: intEnv('LIGHTHOUSE_NUM_RUNS', 5),
-  cellTimeoutMs: intEnv('CELL_TIMEOUT_MS', 15 * 60 * 1000),     // 15 min hard ceiling per cell
+  // Same run count for both throttle methods so the sample sizes stay
+  // comparable. 15 gives a tighter distribution than Google's recommended 5,
+  // which matters most for the noisier real-browser ('devtools') runs.
+  numRuns: intEnv('LIGHTHOUSE_NUM_RUNS', 15),
+  // Wall-clock ceiling on the whole `lhci collect` (all runs share it). Same
+  // run count, but 'devtools' applies real Slow 4G in real time so each run is
+  // far slower — it needs a bigger budget than Lantern ('simulate').
+  cellTimeoutMs: intEnv('CELL_TIMEOUT_MS', 15 * 60 * 1000),            // 15 min for simulate
+  cellTimeoutMsDevtools: intEnv('CELL_TIMEOUT_MS_DEVTOOLS', 35 * 60 * 1000), // 35 min for devtools
   installTimeoutMs: intEnv('INSTALL_TIMEOUT_MS', 5 * 60 * 1000),// 5 min ceiling for pre-lhci installCmd
   workerIdleSleepMs: intEnv('WORKER_IDLE_SLEEP_MS', 5000),       // poll cadence when queue is empty
 

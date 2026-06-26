@@ -755,7 +755,10 @@ Each of those is its own PR; opening separate tickets is fine.
 | `lighthouse.tbt` | distribution | `millisecond` | non-negative | same |
 | `lighthouse.cls` | distribution | `number` | non-negative (typically 0–0.25, can exceed 1) | same |
 | `lighthouse.bytes` | distribution | `byte` | non-negative | same |
+| `lighthouse.element_timing` | distribution | `millisecond` | non-negative | same + `element` (the `performance.measure` name with the `element-timing-` prefix stripped, e.g. `hero-image`) |
 | `lighthouse.cell.completed` | counter | — | always 1 | `app, mode, branch, commit, serve_mode, throttle_method, result (completed\|failed), runs` |
+
+`lighthouse.element_timing` is emitted once per `performance.measure('element-timing-<label>')` the instrumented app records (surfaced via Lighthouse's `user-timings` audit), so a single run can produce many data points. Group/split by `element` to compare individual elements; runs without the instrumentation emit none.
 
 Note on units: Sentry's metrics product accepts only a fixed set of unit strings (see the API error if you pass an invalid one — the allowed list includes `integer`, `number`, `millisecond`, `byte`, `percentage`, but not `ratio` or `percent`). Picking a valid unit is what enables `p50` / `p90` / `p99` aggregates in dashboards; an invalid unit silently downgrades the metric to a string-typed field and aggregates refuse to run.
 
