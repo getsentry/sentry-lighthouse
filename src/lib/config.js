@@ -38,6 +38,20 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   logLevel: process.env.LOG_LEVEL ?? 'info',
 
+  // Number of reverse-proxy hops in front of us that append X-Forwarded-For.
+  // This is a *count*, never `true`: trusting the whole chain lets a caller
+  // prepend an arbitrary XFF entry and become `req.ip`, which would hand them a
+  // fresh rate-limit bucket per request. Fastify counts from the right, so `1`
+  // means "the rightmost entry was added by our edge; ignore anything left of
+  // what that hop reports". Set to 0 when nothing fronts us (local dev) so
+  // req.ip is the socket address.
+  //
+  // Getting this wrong is safe-but-degraded in one direction and degraded in
+  // the other: too low and req.ip resolves to an internal proxy address shared
+  // by every client (one global bucket); too high and the leading entries are
+  // caller-controlled again. Verify against a real request before changing it.
+  trustProxyHops: intEnv('TRUST_PROXY_HOPS', 1, { allowZero: true }),
+
   // Identity / versioning. Northflank exposes the four NF_* build args
   // automatically when listed in the service's Build args config. We prefer
   // those (truthier than what a human would manually pass) and fall back to
@@ -65,6 +79,11 @@ export const config = {
   maxUploadBytes: intEnv('MAX_UPLOAD_BYTES', 104_857_600),
   // 0 = delete bundles as soon as a build leaves the queue (useful for tests).
   bundleRetentionDays: intEnv('BUNDLE_RETENTION_DAYS', 7, { allowZero: true }),
+  // Requests per IP per window, applied to every route including /healthz.
+  // Generous enough that CI (a handful of uploads per build) and Northflank's
+  // 30s healthcheck never notice; low enough to cap a flood.
+  rateLimitMax: intEnv('RATE_LIMIT_MAX', 100),
+  rateLimitWindowMs: intEnv('RATE_LIMIT_WINDOW_MS', 60_000),
 
   // Lighthouse runtime
   chromePath: process.env.CHROME_PATH ?? '',

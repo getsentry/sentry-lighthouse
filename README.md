@@ -106,6 +106,10 @@ pnpm docker:run
 
 All write endpoints require `Authorization: Bearer $UPLOAD_TOKEN`.
 
+Every route is rate-limited to 100 requests per minute per client IP (`RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS`). Over the limit returns `429` with `{ "error": "rate_limited" }`.
+
+Buckets are keyed on `req.ip`, which is derived from `X-Forwarded-For` using a **hop count** (`TRUST_PROXY_HOPS`, default `1`) rather than by trusting the whole chain — otherwise a caller could prepend their own XFF entry and get a fresh bucket per request. If you put this behind additional proxies, raise the count to match; see [`.env.example`](./.env.example).
+
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/healthz` | none | Liveness + queue depth (`queue.queued`, `running`, `pendingPublish`) |
@@ -151,6 +155,6 @@ The live deployment is configured per the table below. To stand up another insta
 | Resources | 2 vCPU / 4 GB RAM (matches Lighthouse's hardware recommendation) |
 | Healthcheck | `GET /healthz` every 30s |
 | Secrets | `UPLOAD_TOKEN`, `SENTRY_DSN` |
-| Env | `SENTRY_ENVIRONMENT=production` (the rest have sensible defaults in the Dockerfile) |
+| Env | `SENTRY_ENVIRONMENT=production` (the rest have sensible defaults in the Dockerfile). If Northflank's ingress ever adds a second `X-Forwarded-For` hop, bump `TRUST_PROXY_HOPS` to match — verify with `curl -H 'X-Forwarded-For: 1.2.3.4' /healthz` and confirm the logged `ip` is your real address, not `1.2.3.4`. |
 
 The CI side (the `sentry-javascript` workflow that builds test apps and POSTs them here) lives in a separate PR. The full hand-off doc for that work — API contract, bundle format, file-by-file checklist of what to change in `sentry-javascript` — is in [`docs/sentry-javascript-handoff.md`](./docs/sentry-javascript-handoff.md).

@@ -13,6 +13,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 
 import Fastify from 'fastify';
 import fastifyMultipart from '@fastify/multipart';
+import fastifyRateLimit from '@fastify/rate-limit';
 
 import { runMigrations } from './db/migrate.js';
 import { closeDb } from './db/index.js';
@@ -35,11 +36,38 @@ async function buildServer() {
     loggerInstance: logger,                      // Fastify 5: pass an existing pino instance
     bodyLimit: config.maxUploadBytes,           // accept large multipart bundles
     disableRequestLogging: false,
-    trustProxy: true,                            // Northflank fronts us with a proxy
+    // Hop count, not `true` — see config.trustProxyHops. `true` would trust the
+    // whole X-Forwarded-For chain, letting a caller prepend a value of their
+    // choosing and control req.ip (and so their rate-limit bucket).
+    trustProxy: config.trustProxyHops,
     genReqId: () => crypto.randomUUID(),
   });
 
   // --- Plugins ---
+  // Rate limiting first, so a flood is rejected before we spend anything on
+  // auth or body parsing. Applies to every route, /healthz included: its queue
+  // query is a full scan of `cells`, and better-sqlite3 being synchronous means
+  // each one blocks the worker sharing this event loop.
+  await fastify.register(fastifyRateLimit, {
+    max: config.rateLimitMax,
+    timeWindow: config.rateLimitWindowMs,
+    // No keyGenerator override on purpose. The default already keys on req.ip
+    // (which the trustProxy hop count above resolves to the real client) and
+    // additionally masks IPv6 to its /64 — without that, one residential prefix
+    // is 2^64 buckets and the limit is trivially bypassed by rotating addresses
+    // (CVE-2026-15144, fixed in the 11.2.0 pinned here). The plugin selects the
+    // masking path by identity (`params.keyGenerator === defaultKeyGenerator`),
+    // so *any* custom generator silently opts out of it.
+    // The plugin *throws* whatever this returns, so it must carry a statusCode
+    // or Fastify turns it into a 500 (which would also trip the Sentry onError
+    // hook below). 429 keeps it out of that hook, since it only reports >=5xx.
+    errorResponseBuilder: (_req, context) => ({
+      statusCode: 429,
+      error: 'rate_limited',
+      message: `Too many requests. Limit is ${context.max} per ${context.after}.`,
+    }),
+  });
+
   await fastify.register(authPlugin);
 
   // Report any 5xx-and-above error to Sentry. 4xx errors (validation, auth,

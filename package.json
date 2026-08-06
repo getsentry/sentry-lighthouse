@@ -24,6 +24,7 @@
     "@fastify/basic-auth": "6.2.0",
     "@fastify/bearer-auth": "10.1.0",
     "@fastify/multipart": "9.0.3",
+    "@fastify/rate-limit": "11.2.0",
     "@lhci/cli": "0.15.1",
     "@sentry/node": "10.69.0",
     "ajv": "8.18.0",
