@@ -36,7 +36,10 @@ async function buildServer() {
     loggerInstance: logger,                      // Fastify 5: pass an existing pino instance
     bodyLimit: config.maxUploadBytes,           // accept large multipart bundles
     disableRequestLogging: false,
-    trustProxy: true,                            // Northflank fronts us with a proxy
+    // Hop count, not `true` — see config.trustProxyHops. `true` would trust the
+    // whole X-Forwarded-For chain, letting a caller prepend a value of their
+    // choosing and control req.ip (and so their rate-limit bucket).
+    trustProxy: config.trustProxyHops,
     genReqId: () => crypto.randomUUID(),
   });
 
@@ -49,7 +52,7 @@ async function buildServer() {
     max: config.rateLimitMax,
     timeWindow: config.rateLimitWindowMs,
     // No keyGenerator override on purpose. The default already keys on req.ip
-    // (so `trustProxy` above still attributes requests to the real client) and
+    // (which the trustProxy hop count above resolves to the real client) and
     // additionally masks IPv6 to its /64 — without that, one residential prefix
     // is 2^64 buckets and the limit is trivially bypassed by rotating addresses
     // (CVE-2026-15144, fixed in the 11.2.0 pinned here). The plugin selects the
