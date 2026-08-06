@@ -13,6 +13,7 @@ import { setTimeout as wait } from 'node:timers/promises';
 
 import Fastify from 'fastify';
 import fastifyMultipart from '@fastify/multipart';
+import fastifyRateLimit from '@fastify/rate-limit';
 
 import { runMigrations } from './db/migrate.js';
 import { closeDb } from './db/index.js';
@@ -40,6 +41,26 @@ async function buildServer() {
   });
 
   // --- Plugins ---
+  // Rate limiting first, so a flood is rejected before we spend anything on
+  // auth or body parsing. Applies to every route, /healthz included: its queue
+  // query is a full scan of `cells`, and better-sqlite3 being synchronous means
+  // each one blocks the worker sharing this event loop.
+  await fastify.register(fastifyRateLimit, {
+    max: config.rateLimitMax,
+    timeWindow: config.rateLimitWindowMs,
+    // req.ip, which respects `trustProxy` above — so we key on the real client
+    // rather than Northflank's proxy.
+    keyGenerator: req => req.ip,
+    // The plugin *throws* whatever this returns, so it must carry a statusCode
+    // or Fastify turns it into a 500 (which would also trip the Sentry onError
+    // hook below). 429 keeps it out of that hook, since it only reports >=5xx.
+    errorResponseBuilder: (_req, context) => ({
+      statusCode: 429,
+      error: 'rate_limited',
+      message: `Too many requests. Limit is ${context.max} per ${context.after}.`,
+    }),
+  });
+
   await fastify.register(authPlugin);
 
   // Report any 5xx-and-above error to Sentry. 4xx errors (validation, auth,

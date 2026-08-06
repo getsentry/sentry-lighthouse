@@ -106,6 +106,8 @@ pnpm docker:run
 
 All write endpoints require `Authorization: Bearer $UPLOAD_TOKEN`.
 
+Every route is rate-limited to 100 requests per minute per client IP (`RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS`). Over the limit returns `429` with `{ "error": "rate_limited" }`.
+
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/healthz` | none | Liveness + queue depth (`queue.queued`, `running`, `pendingPublish`) |

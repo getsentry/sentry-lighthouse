@@ -65,6 +65,11 @@ export const config = {
   maxUploadBytes: intEnv('MAX_UPLOAD_BYTES', 104_857_600),
   // 0 = delete bundles as soon as a build leaves the queue (useful for tests).
   bundleRetentionDays: intEnv('BUNDLE_RETENTION_DAYS', 7, { allowZero: true }),
+  // Requests per IP per window, applied to every route including /healthz.
+  // Generous enough that CI (a handful of uploads per build) and Northflank's
+  // 30s healthcheck never notice; low enough to cap a flood.
+  rateLimitMax: intEnv('RATE_LIMIT_MAX', 100),
+  rateLimitWindowMs: intEnv('RATE_LIMIT_WINDOW_MS', 60_000),
 
   // Lighthouse runtime
   chromePath: process.env.CHROME_PATH ?? '',
