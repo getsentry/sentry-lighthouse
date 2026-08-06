@@ -48,9 +48,13 @@ async function buildServer() {
   await fastify.register(fastifyRateLimit, {
     max: config.rateLimitMax,
     timeWindow: config.rateLimitWindowMs,
-    // req.ip, which respects `trustProxy` above — so we key on the real client
-    // rather than Northflank's proxy.
-    keyGenerator: req => req.ip,
+    // No keyGenerator override on purpose. The default already keys on req.ip
+    // (so `trustProxy` above still attributes requests to the real client) and
+    // additionally masks IPv6 to its /64 — without that, one residential prefix
+    // is 2^64 buckets and the limit is trivially bypassed by rotating addresses
+    // (CVE-2026-15144, fixed in the 11.2.0 pinned here). The plugin selects the
+    // masking path by identity (`params.keyGenerator === defaultKeyGenerator`),
+    // so *any* custom generator silently opts out of it.
     // The plugin *throws* whatever this returns, so it must carry a statusCode
     // or Fastify turns it into a 500 (which would also trip the Sentry onError
     // hook below). 429 keeps it out of that hook, since it only reports >=5xx.
