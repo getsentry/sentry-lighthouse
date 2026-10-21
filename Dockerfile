@@ -8,7 +8,7 @@
 # Run:
 #   docker run --rm -p 8080:8080 -v $(pwd)/data:/data --env-file .env sentry-lighthouse
 
-FROM node:22.22.2-bookworm-slim
+FROM node:22.23.4-bookworm-slim
 
 # Chrome runtime deps. We use Playwright's bundled Chromium (pinned, reproducible)
 # rather than `apt install chromium` (floats with Debian updates).
